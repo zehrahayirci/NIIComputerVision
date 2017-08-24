@@ -17,13 +17,13 @@ import scipy.io
 import time
 import pyopencl as cl
 
-libPath = "/Users/nii-user/inoe/NIIComputerVision/code"
-RGBD_ = imp.load_source('RGBD', libPath+'/lib/RGBD.py')
-TrackManager = imp.load_source('TrackManager', libPath+'/lib/tracking.py')
-TSDFtk = imp.load_source('TSDFtk', libPath+'/lib/TSDF.py')
-GPU = imp.load_source('GPUManager',libPath +'/lib/GPUManager.py')
-My_MC = imp.load_source('My_MarchingCube',libPath+ '/lib/My_MarchingCube.py')
-Stitcher = imp.load_source('Stitcher',libPath+ '/lib/Stitching.py')
+libPath = ""
+RGBD_ = imp.load_source('RGBD', libPath+'lib/RGBD.py')
+TrackManager = imp.load_source('TrackManager', libPath+'lib/tracking.py')
+TSDFtk = imp.load_source('TSDFtk', libPath+'lib/TSDF.py')
+GPU = imp.load_source('GPUManager',libPath +'lib/GPUManager.py')
+My_MC = imp.load_source('My_MarchingCube',libPath+ 'lib/My_MarchingCube.py')
+Stitcher = imp.load_source('Stitcher',libPath+ 'lib/Stitching.py')
 
 
 def in_mat_zero2one(mat):
@@ -134,8 +134,8 @@ draw_spline = False
 
 
 #top = tk.Tk()
-pathdata= "/Users/nii-user/inoe/data/"
-path = "/Users/nii-user/inoe/NIIComputerVision/data/"
+pathdata= "../data/"
+path = "../data/"
 color_tag = 1
 calib_file = open(path + '/Calib.txt', 'r')
 calib_data = calib_file.readlines()
