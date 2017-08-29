@@ -90,20 +90,6 @@
 \setcounter{secnumdepth}{5}
 \makeindex
 
-% Hyperlinks (required, but should be loaded last)
-\usepackage{ifpdf}
-\ifpdf
-  \usepackage[pdftex,pagebackref=true]{hyperref}
-\else
-  \usepackage[ps2pdf,pagebackref=true]{hyperref}
-\fi
-\hypersetup{%
-  colorlinks=true,%
-  linkcolor=blue,%
-  citecolor=blue,%
-  unicode%
-}
-
 % Custom commands
 \newcommand{\clearemptydoublepage}{%
   \newpage{\pagestyle{empty}\cleardoublepage}%
@@ -117,10 +103,6 @@
 \begin{document}
 
 % Titlepage & ToC
-\hypersetup{pageanchor=false,
-             bookmarksnumbered=true,
-             pdfencoding=unicode
-            }
 \pagenumbering{alph}
 \begin{titlepage}
 \vspace*{7cm}
@@ -135,7 +117,6 @@
 \tableofcontents
 \clearemptydoublepage
 \pagenumbering{arabic}
-\hypersetup{pageanchor=true}
 
 %--- Begin generated contents ---
 \chapter{Namespace Index}

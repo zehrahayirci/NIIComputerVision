@@ -1,4 +1,4 @@
-.TH "Stitching.Stitch" 3 "Mon Aug 7 2017" "Version v0.5" "SegmentedFusion" \" -*- nroff -*-
+.TH "Stitching.Stitch" 3 "Wed Aug 9 2017" "Version v0.7" "Segmented Fusion" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -52,7 +52,26 @@ Stitching.Stitch
 .in -1c
 .SH "Detailed Description"
 .PP 
-Definition at line 17 of file Stitching\&.py\&.
+
+.PP
+.nf
+All method that concern linking or aligning body parts together are in Stitch
+
+.fi
+.PP
+ 
+.SH "Constructor & Destructor Documentation"
+.PP 
+.SS "def Stitching\&.Stitch\&.__init__ ( self,  number_bodyPart)"
+
+.PP
+.nf
+Constructor
+:param number_bodyPart: number of body parts
+
+.fi
+.PP
+ 
 .SH "Member Function Documentation"
 .PP 
 .SS "def Stitching\&.Stitch\&.GetBBTransfo ( self,  pos2d,  cur,  prev,  RGBD,  bp)"
@@ -61,17 +80,16 @@ Definition at line 17 of file Stitching\&.py\&.
 .nf
 Transform Pose matrix to move the model body parts according to the position of the skeleton
 For now just a rotation in the z axis
-bp : numero of the body parts
-pos2d : position in 2D of the junctions
-cur : index for the current frame
-prev : index for the previous frame
-RGBD : an RGBD object containing the image
+:param bp : number of the body parts
+:param pos2d : position in 2D of the junctions
+:param cur : index for the current frame
+:param prev : index for the previous frame
+:param RGBD : an RGBD object containing the image
+:return The transform between two skeleton
 
 .fi
 .PP
  
-.PP
-Definition at line 133 of file Stitching\&.py\&.
 .SS "def Stitching\&.Stitch\&.GetCoordSyst ( self,  pos2d,  jt,  RGBD,  bp)"
 
 .PP
@@ -86,74 +104,77 @@ This function compute the coordinates system of a body part according to the cam
 .fi
 .PP
  
-.PP
-Definition at line 168 of file Stitching\&.py\&.
 .SS "def Stitching\&.Stitch\&.GetPos ( self,  bp)"
 
 .PP
 .nf
-:param bp:
+According to the body parts, get the correct index of junctions
+mid is used to get the center while pos1 and pos2 give extremes junctions of the body parts
+:param bp: number of the body part
 :return: return the junctions corresponding to the body parts
 
 .fi
 .PP
  
-.PP
-Definition at line 220 of file Stitching\&.py\&.
 .SS "def Stitching\&.Stitch\&.NaiveStitch ( self,  PartVtx,  PartNmls,  PartFaces,  PoseBP)"
 
 .PP
 .nf
-This function will just add the vertices and faces of each body parts 
+Add the vertices and faces of each body parts
 together after transforming them in the global coordinates system
+:param PartVtx: List of vertices for a body parts
+:param PartNmls: List of normales for a body parts
+:param PartFaces:  List of faces for a body parts
+:param PoseBP: local to global transform
+:return: none
 
 .fi
 .PP
  
-.PP
-Definition at line 24 of file Stitching\&.py\&.
 .SS "def Stitching\&.Stitch\&.RArmsTransform ( self,  angle,  bp,  pos2d,  RGBD,  Tg)"
 
 .PP
 .nf
 Transform Pose matrix to move the model of the right arm
 For now just a rotation in the z axis
-bp : numero of the body parts
-pos2d : position in 2D of the junctions
-RGBD : an RGBD object containing the image
-Tg : local to global transform
+:param bp : number of the body parts
+:param pos2d : position in 2D of the junctions
+:param RGBD : an RGBD object containing the image
+:param Tg : local to global transform
 TEST FUNCTION : TURN THE LEFT ARM OF THE SEGMENTED BODY.
 
 .fi
 .PP
  
-.PP
-Definition at line 62 of file Stitching\&.py\&.
 .SS "def Stitching\&.Stitch\&.TransformNmls ( self,  Nmls,  Pose,  s)"
 
 .PP
 .nf
 Transform the normales in a system to another system.
 Here it will be mostly used to transform from local system to global coordiantes system
+:param Nmls:  List of normales
+:param Pose: local to global transform
+:param s: subsampling factor
+:return: list of transformed normales
 
 .fi
 .PP
  
-.PP
-Definition at line 53 of file Stitching\&.py\&.
 .SS "def Stitching\&.Stitch\&.TransformVtx ( self,  Vtx,  Pose,  s)"
 
 .PP
 .nf
 Transform the vertices in a system to another system.
 Here it will be mostly used to transform from local system to global coordiantes system
+:param Vtx: List of vertices
+:param Pose:  local to global transform
+:param s: subsampling factor
+:return: list of transformed vertices
 
 .fi
 .PP
  
-.PP
-Definition at line 43 of file Stitching\&.py\&.
 
 .SH "Author"
 .PP 
-Generated automatically by Doxygen for SegmentedFusion from the source code\&.
+Generated automatically by Doxygen for Segmented Fusion from the source code\&.
