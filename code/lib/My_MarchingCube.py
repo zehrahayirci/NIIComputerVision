@@ -104,7 +104,7 @@ class My_MarchingCube():
         """
         if display != 0:
             start_time3 = time.time()
-        path = './meshes/'
+        path = '../meshes/'
         f = open(path+name, 'wb')
         
         # Write headers
@@ -150,7 +150,7 @@ class My_MarchingCube():
 
         if display != 0:
             start_time3 = time.time()
-        path = './meshes/'
+        path = '../meshes/'
         f = open(path+name, 'wb')
         
         # Write headers
