@@ -34,8 +34,8 @@ class RGBD():
         :param intrinsic: matrix with calibration parameters
         :param fact: factor for converting pixel value to meter or conversely
         """
-        self.depthname = depthname
-        self.colorname = colorname
+        self.depthname = depthname # useless
+        self.colorname = colorname # useless
         self.intrinsic = intrinsic
         self.fact = fact
         
@@ -49,7 +49,7 @@ class RGBD():
         :return:  none
         """
         self.lImages = Images
-        self.numbImages = len(self.lImages.transpose())
+        self.numbImages = len(self.lImages.transpose()) # useless
         self.Index = -1
         self.pos2d = Pos_2D
         self.connection = BodyConnection
@@ -87,7 +87,7 @@ class RGBD():
         self.Size = (size_depth[0], size_depth[1], 3)
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
         self.depth_image = depth_in.astype(np.float32) / self.fact
-        self.skel = self.depth_image.copy()
+        self.skel = self.depth_image.copy() # useless
 
     #####################################################################
     ################### Map Conversion Functions #######################
@@ -122,7 +122,7 @@ class RGBD():
         y_raw = np.zeros([self.Size[0],self.Size[1]], np.float32)
         # change the matrix so that the first row is on all rows for x respectively colunm for y.
         x_raw[0:-1,:] = ( np.arange(self.Size[1]) - self.intrinsic[0,2])/self.intrinsic[0,0]
-        y_raw[:,0:-1] = np.tile( ( np.arange(self.Size[0]) - self.intrinsic[1,2])/self.intrinsic[1,1],(1,1)).transpose()
+        y_raw[:,0:-1] = np.tile( ( np.arange(self.Size[0]) - self.intrinsic[1,2])/self.intrinsic[1,1],(1,1)).transpose() # tile is useless
         # multiply point by point d_pos and raw matrices
         x = d_pos * x_raw
         y = d_pos * y_raw
@@ -597,6 +597,7 @@ class RGBD():
     
            
     def myPCA(self, dims_rescaled_data=3):
+        # dims_rescaled_data useless
         """
         Compute the principal component analysis on a cloud of points
         to get the coordinates system local to the cloud of points

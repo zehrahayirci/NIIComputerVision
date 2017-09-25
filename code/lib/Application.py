@@ -254,8 +254,8 @@ class Application(tk.Frame):
         self.root = master
         self.path = path
         self.GPUManager = GPUManager
-        self.draw_bump = False
-        self.draw_spline = False
+        self.draw_bump = False # useless
+        self.draw_spline = False # useless
 
         tk.Frame.__init__(self, master)
         self.pack()
