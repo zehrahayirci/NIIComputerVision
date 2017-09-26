@@ -246,6 +246,7 @@ class My_MarchingCube():
     def TransformList(self, Pose):
         '''
             Function to transform normals and vertices of the mesh
+            NOT USED
         '''
         stack_pt = np.ones(np.size(self.Vertices,0), dtype = np.float32)
         pt = np.stack((self.Vertices[:,0],self.Vertices[:,1],self.Vertices[:,2], stack_pt),axis =1)
@@ -402,6 +403,7 @@ class My_MarchingCube():
             Function to convert the list of normales and vertexes of the marching cubes' algorithm into
             424*512*3 matrix.
             This function is made just to test with the RegisterRGBD function if the data from the mesh are corrects.
+            NOT USED
         '''
         result = np.zeros((RGBD.Size[0], RGBD.Size[1], 3), dtype = np.uint8)#
         stack_pix = np.ones( (np.size(Vtx[ ::s,:],0)) , dtype = np.float32)
