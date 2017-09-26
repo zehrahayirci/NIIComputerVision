@@ -87,7 +87,7 @@ class RGBD():
         self.Size = (size_depth[0], size_depth[1], 3)
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
         self.depth_image = depth_in.astype(np.float32) / self.fact
-        self.skel = self.depth_image.copy() # useless
+        # self.skel = self.depth_image.copy() # useless
 
     #####################################################################
     ################### Map Conversion Functions #######################
@@ -122,7 +122,7 @@ class RGBD():
         y_raw = np.zeros([self.Size[0],self.Size[1]], np.float32)
         # change the matrix so that the first row is on all rows for x respectively colunm for y.
         x_raw[0:-1,:] = ( np.arange(self.Size[1]) - self.intrinsic[0,2])/self.intrinsic[0,0]
-        y_raw[:,0:-1] = np.tile( ( np.arange(self.Size[0]) - self.intrinsic[1,2])/self.intrinsic[1,1],(1,1)).transpose() # tile is useless
+        y_raw[:,0:-1] = np.tile( ( np.arange(self.Size[0]) - self.intrinsic[1,2])/self.intrinsic[1,1],(1,1)).transpose()
         # multiply point by point d_pos and raw matrices
         x = d_pos * x_raw
         y = d_pos * y_raw
@@ -155,14 +155,14 @@ class RGBD():
         """
         self.Nmls = np.zeros(self.Size, np.float32)
         # matrix of normales for each direction
-        nmle1 = General.normalized_cross_prod_optimize(self.Vtx[2:self.Size[0]  ][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[1:self.Size[0]-1][:,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])        
-        nmle2 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1][:,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[0:self.Size[0]-2][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])
-        nmle3 = General.normalized_cross_prod_optimize(self.Vtx[0:self.Size[0]-2][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[1:self.Size[0]-1][:,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])
-        nmle4 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1][:,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[2:self.Size[0]  ][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])
+        nmle1 = General.normalized_cross_prod_optimize(self.Vtx[2:self.Size[0],1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[1:self.Size[0]-1,2:self.Size[1]] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])        
+        nmle2 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[0:self.Size[0]-2,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
+        nmle3 = General.normalized_cross_prod_optimize(self.Vtx[0:self.Size[0]-2,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[1:self.Size[0]-1,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
+        nmle4 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[2:self.Size[0],1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
         nmle = (nmle1 + nmle2 + nmle3 + nmle4)/4.0
         # normalized
         norm_mat_nmle = np.sqrt(np.sum(nmle*nmle,axis=2))
@@ -307,6 +307,7 @@ class RGBD():
         return result  
 
 
+    # useless
     def Transform(self, Pose):
         """
         Transform Vertices and Normales with the Pose matrix (generally camera pose matrix)
@@ -541,7 +542,7 @@ class RGBD():
         e2b = np.array( [e2[0],e2[1],e2[2],0])
         e3b = np.array( [e3[0],e3[1],e3[2],0])
         #center of coordinates system
-        origine = np.array( [ctr[0],self.ctr3D[i][1],ctr[2],1])
+        origine = np.array( [ctr[0],ctr[1],ctr[2],1])
         # concatenate it in the right order.
         Transfo = np.stack( (e1b,e2b,e3b,origine),axis = 0 )
         self.TransfoBB.append(Transfo.transpose())
@@ -717,12 +718,11 @@ class RGBD():
             drawVects.append(np.array([column_index,line_index]))
         return drawVects
             
-    def GetProjPts2D_optimize(self, vects3D, Pose, s=1) :
+    def GetProjPts2D_optimize(self, vects3D, Pose) :
         """
         Project a list of vertexes in the image RGBD. Optimize for CPU version.
         :param vects3D: list of 3 elements vector
         :param Pose: Transformation matrix
-        :param s: subsampling coefficient
         :return: transformed list of 3D vector
         """
         '''Project a list of vertexes in the image RGBD'''
@@ -745,7 +745,7 @@ class RGBD():
 
 
             
-    def GetNewSys(self, Pose,ctr2D,nbPix, s=1) : 
+    def GetNewSys(self, Pose,ctr2D,nbPix) : 
         '''
         compute the coordinates of the points that will create the coordinates system
         '''
@@ -753,8 +753,7 @@ class RGBD():
         maxDepth = max(0.0001, np.max(self.Vtx[:,:,2]))
 
         for i in range(1,len(self.vects3D)):
-            self.vects3D[i] = np.dot(self.vects3D[i],Pose[0:3,0:3].T )
-            vect = self.vects3D[i]
+            vect = np.dot(self.vects3D[i],Pose[0:3,0:3].T )
             newPt = np.zeros(vect.shape)
             for j in range(vect.shape[0]):
                 newPt[j][0] = ctr2D[i][0]-nbPix*vect[j][0]

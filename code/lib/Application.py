@@ -91,6 +91,7 @@ class Application(tk.Frame):
             if(self.center_tag):
                 self.DrawCenters2D(self.Pose)
             if(self.Sys_tag):
+                self.DrawCenters2D(self.Pose)
                 self.DrawSys2D(self.Pose)
             if(self.OBBox_tag):
                 self.DrawOBBox2D(self.Pose)
@@ -175,6 +176,7 @@ class Application(tk.Frame):
         if(self.center_tag):
             self.DrawCenters2D(self.Pose)
         if(self.Sys_tag):
+            self.DrawCenters2D(self.Pose)
             self.DrawSys2D(self.Pose)
         if(self.OBBox_tag):
             self.DrawOBBox2D(self.Pose)
@@ -359,7 +361,7 @@ class Application(tk.Frame):
             # Compute vertex map and normal map
             self.RGBD[bp].Vmap_optimize()   
             self.RGBD[bp].NMap_optimize()
-
+       
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
 
@@ -420,8 +422,9 @@ class Application(tk.Frame):
         img_label[:,:,2] = img_label_temp[:,:,0]
         print("0 frame")
         cv2.imshow("0 label", img_label)
+        cv2.waitKey(1)
 
-        #"""
+        """
         # initialize tracker for camera pose
         Tracker = TrackManager.Tracker(0.001, 0.5, 1, [10])
         formerIdx = self.Index
