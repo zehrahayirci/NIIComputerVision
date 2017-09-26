@@ -241,21 +241,22 @@ class RGBD():
         # if in 1D pix[1] = pt[1]/pt[2]
         pix[ ::s, ::s,1] = (lpt[1]/lpt[2]).reshape(np.size(self.Vtx[ ::s, ::s,:],0), np.size(self.Vtx[ ::s, ::s,:],1))
         pix = np.dot(self.intrinsic,pix[0:self.Size[0],0:self.Size[1]].transpose(0,2,1)).transpose(1,2,0)
-        column_index = (np.round(pix[:,:,0])).astype(int)
-        line_index = (np.round(pix[:,:,1])).astype(int)
+        column_index = (np.round(pix[::s,::s,0])).astype(int)
+        line_index = (np.round(pix[::s,::s,1])).astype(int)
         # create matrix that have 0 when the conditions are not verified and 1 otherwise
         cdt_column = (column_index > -1) * (column_index < self.Size[1])
         cdt_line = (line_index > -1) * (line_index < self.Size[0])
-        line_index = line_index*cdt_line
-        column_index = column_index*cdt_column
+        cdt = cdt_column*cdt_line
+        line_index = line_index*cdt
+        column_index = column_index*cdt
         if (color == 0):
             result[line_index[:][:], column_index[:][:]]= np.dstack((self.color_image[ ::s, ::s,2], \
                                                                      self.color_image[ ::s, ::s,1]*cdt_line, \
                                                                      self.color_image[ ::s, ::s,0]*cdt_column) )
         else:
-            result[line_index[:][:], column_index[:][:]]= np.dstack( ( (nmle[ :, :,0]+1.0)*(255./2.), \
-                                                                       ((nmle[ :, :,1]+1.0)*(255./2.))*cdt_line, \
-                                                                       ((nmle[ :, :,2]+1.0)*(255./2.))*cdt_column ) ).astype(int)
+            result[line_index[:][:], column_index[:][:]]= np.dstack( ( (nmle[ ::s, ::s,0]+1.0)*(255./2.)*cdt, \
+                                                                       ((nmle[ ::s, ::s,1]+1.0)*(255./2.))*cdt, \
+                                                                       ((nmle[ ::s, ::s,2]+1.0)*(255./2.))*cdt ) ).astype(int)
         return result
 
 
@@ -283,8 +284,8 @@ class RGBD():
         # projection in 2D space
         lpt = np.split(pt,4,axis=1)
         lpt[2] = General.in_mat_zero2one(lpt[2])
-        pix[ ::s,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
-        pix[ ::s,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
+        pix[ :,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
+        pix[ :,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
         pix = np.dot(pix,self.intrinsic.T)
 
         column_index = (np.round(pix[:,0])).astype(int)
@@ -292,16 +293,17 @@ class RGBD():
         # create matrix that have 0 when the conditions are not verified and 1 otherwise
         cdt_column = (column_index > -1) * (column_index < self.Size[1])
         cdt_line = (line_index > -1) * (line_index < self.Size[0])
-        line_index = line_index*cdt_line
-        column_index = column_index*cdt_column
+        cdt = cdt_column*cdt_line
+        line_index = line_index*cdt
+        column_index = column_index*cdt
         if (color == 0):
-            result[line_index[:], column_index[:]]= np.dstack((self.color_image[ ::s, ::s,2], \
-                                                                    self.color_image[ ::s, ::s,1]*cdt_line, \
-                                                                    self.color_image[ ::s, ::s,0]*cdt_column) )
+            result[line_index[:], column_index[:]]= np.dstack((self.color_image[ line_index[:], column_index[:],2]*cdt, \
+                                                                    self.color_image[ line_index[:], column_index[:],1]*cdt, \
+                                                                    self.color_image[ line_index[:], column_index[:],0]*cdt) )
         else:
-            result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ :,0]+1.0)*(255./2.), \
-                                                                       ((nmle[ :,1]+1.0)*(255./2.))*cdt_line, \
-                                                                       ((nmle[ :,2]+1.0)*(255./2.))*cdt_column ) ).astype(int)
+            result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ ::s,0]+1.0)*(255./2.)*cdt, \
+                                                                       ((nmle[ ::s,1]+1.0)*(255./2.))*cdt, \
+                                                                       ((nmle[ ::s,2]+1.0)*(255./2.))*cdt ) ).astype(int)
         return result  
 
 
