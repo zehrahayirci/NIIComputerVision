@@ -423,20 +423,20 @@ class RGBD():
         legRight = self.segm.legSeg(imageWBG,right)
         legLeft = self.segm.legSeg(imageWBG,left)
         head = self.segm.headSeg(imageWBG)
-        
+
         # Retrieve every already segmentated part to the main body.
         tmp = armLeft[0]+armLeft[1]+armRight[0]+armRight[1]+legRight[0]+legRight[1]+legLeft[0]+legLeft[1]+head
-        MidBdyImage =((imageWBG-(tmp>0))>0)
+        MidBdyImage =(imageWBG-(tmp>0))
 
         # display result
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
         # cv2.waitKey(0)
 
         # continue segmentation for hands and feet
-        handRight = ( self.segm.GetHand( MidBdyImage,right)>0)
-        handLeft = ( self.segm.GetHand( MidBdyImage,left)>0)
-        footRight = ( self.segm.GetFoot( MidBdyImage,right)>0)
-        footLeft = ( self.segm.GetFoot( MidBdyImage,left)>0)
+        handRight = ( self.segm.GetHand( MidBdyImage,right))
+        handLeft = ( self.segm.GetHand( MidBdyImage,left))
+        footRight = ( self.segm.GetFoot( MidBdyImage,right))
+        footLeft = ( self.segm.GetFoot( MidBdyImage,left))
 
         # display the trunck
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
@@ -444,7 +444,7 @@ class RGBD():
 
         # Retrieve again every newly computed segmentated part to the main body.
         tmp2 = handRight+handLeft+footRight+footLeft
-        MidBdyImage2 =((MidBdyImage-(tmp2>0))>0)
+        MidBdyImage2 =(MidBdyImage-(tmp2))
 
         # Display result
         # cv2.imshow('MidBdyImage2' , MidBdyImage2.astype(np.float))

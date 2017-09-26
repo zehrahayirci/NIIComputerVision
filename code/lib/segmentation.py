@@ -65,7 +65,7 @@ class Segmentation(object):
         :return: an array of coefficient
         a is the normalized distance in the x axis
         b is the normalized distance in the y axis
-        c is the slope between the two points
+        c is the constant between the two points
         """
         #Be sure A and B are different
         if (A == B).all():
@@ -80,7 +80,7 @@ class Segmentation(object):
         dist = np.sqrt(np.square(diffY) + np.square(diffX)) 
         a = diffY/dist # normalized distance
         b = diffX/dist # normalized distance
-        #slope between two points
+        #constant in this line
         c = -a*A[0]-b*A[1]
         return np.array([a,b,c])
     
@@ -90,7 +90,7 @@ class Segmentation(object):
         :param A: Depth Image
         :param a: dist x axe between two points
         :param b: dist y axe between two points
-        :param c: slope between two points
+        :param c: constant of this line
         :param point: a junction
         :param T: max distance to find intersection
         :return: two intersection points between a slope and the edges of the body part
@@ -106,37 +106,48 @@ class Segmentation(object):
                 y = y-1
                 # keep track of the perpendicular slope
                 x = int(np.round(-(b*y+c)/a))
-                # if an edge is reached
-                if A[y,x]==0:
-                    x_up = x
-                    y_up = y
-                    break
-                else:
-                    # if the max distance is reached
-                    distCdt = LA.norm([x,y]-point)>T
-                    if distCdt:#sqrt((x-point(1))^2+(y-point(2))^2)>T:
+                inImage = (x>0) and (x<=col) and (y>0) and (y<=line)
+                if(inImage):
+                    # if an edge is reached
+                    if A[y,x]==0:
                         x_up = x
                         y_up = y
                         break
+                    else:
+                        # if the max distance is reached
+                        distCdt = LA.norm([x,y]-point)>T
+                        if distCdt:#sqrt((x-point(1))^2+(y-point(2))^2)>T:
+                            x_up = x
+                            y_up = y
+                            break
+                else:
+                    y_up = y+1
+                    x_up = int(np.round(-(b*y+c)/a))
+                    break
             y = int(point[1])
             # search an edge running through a slope with increasing y
             while 1:
                 y = y+1
                 # keep track of the perpendicular slope
                 x = int(np.round(-(b*y+c)/a))
-                # if an edge is reached
-                if A[y,x]==0:
-                    x_down = x
-                    y_down = y
-                    break
-                else:
-                    # if the max distance is reached
-                    distCdt = LA.norm([x,y]-point)>T
-                    if distCdt:#math.sqrt((x-point(1))^2+(y-point(2))^2)>T:
+                inImage = (x>0) and (x<=col) and (y>0) and (y<=line)
+                if(inImage):
+                    # if an edge is reached
+                    if A[y,x]==0:
                         x_down = x
                         y_down = y
                         break
-    
+                    else:
+                        # if the max distance is reached
+                        distCdt = LA.norm([x,y]-point)>T
+                        if distCdt:#math.sqrt((x-point(1))^2+(y-point(2))^2)>T:
+                            x_down = x
+                            y_down = y
+                            break
+                else:
+                    y_up = y-1
+                    x_up = int(np.round(-(b*y+c)/a))
+                    break
             if x_up>x_down:
                 right = [x_up, y_up]
                 left = [x_down, y_down]
@@ -166,7 +177,7 @@ class Segmentation(object):
                             break
                 else:
                     x_left = x+1
-                    y_left = np.round(-(a*x_left+c)/b)
+                    y_left = int(np.round(-(a*x_left+c)/b))
                     break
         
             x = int(point[0])
@@ -240,21 +251,20 @@ class Segmentation(object):
         res = np.ones([line,col])
         
         #create a matrix containing in each pixel its indices
-        lineIdx = np.array([np.arange(line) for _ in range(col)]).reshape(col,line).transpose()
-        colIdx = np.array([np.arange(col) for _ in range(line)]).reshape(line,col)
+        lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
+        colIdx = np.array([np.arange(col) for _ in range(line)])
         depthIdx = np.ones([line,col])
         ind = np.stack( (colIdx,lineIdx,depthIdx), axis = 2)
-        
         alpha = np.zeros([line,col,limit])
         alpha= np.dot(ind,slopes)
-        # for each k (line) if the points (ref and the current point in alpha) are on the same side then the operation is positiv
+        # for each k (line) if the points (ref and the current point in alpha) are on the same side then the operation is positive
         for k in range(limit):
             alpha[:,:,k]=( (np.dot(alpha[:,:,k],ref[0][k])) >= 0)
         # make sure that each point are on the same side as the reference for all line of the polygon
         for k in range(limit):
             res = res*alpha[:,:,k ]
         #threshold the image so that only positiv values (same side as reference point) are kept.
-        res = (res>0)
+        #res = (res>0)
         #elapsed_time = time.time() - start_time
         #print "polygon_optimize: %f" % (elapsed_time)
         return res
@@ -295,7 +305,7 @@ class Segmentation(object):
                 # trace the slope between the two points
                 for y in range(int(A[1]),int(B[1])+1):
                     x = np.round(-(slopes[1]*y+slopes[2])/slopes[0])
-                    M[int(y),int(x)]= 1
+                    M[y,int(x)]= 1
             else :
                 # if Ax have a higher value than Bx permute A and B
                 if A[0] > B[0]:
@@ -305,7 +315,7 @@ class Segmentation(object):
                 # trace the slope between the two points
                 for x in range(int(A[0]),int(B[0])+1):
                     y = np.round(-(slopes[0]*x+slopes[2])/slopes[1])
-                    M[int(y),int(x)]= 1  
+                    M[int(y),x]= 1  
         ## Fill the polygon
         # Copy the thresholded image.
         im_floodfill = M.copy()
@@ -324,7 +334,7 @@ class Segmentation(object):
          
         # Combine the two images to get the foreground.
         im_out = M | im_floodfill_inv 
-        return im_out
+        return im_out>0
    
     def nearestPeak(self,A,hipLeft,hipRight,knee_right):
         """
@@ -342,19 +352,29 @@ class Segmentation(object):
             # extract rectangle from the tree points depending on each other position
             if (int(hipLeft[1])<int(knee_right)):
                 region = A[int(hipLeft[1]):int(knee_right),int(hipLeft[0]):int(hipRight[0])]
+                pt_start = [int(hipLeft[0]),int(hipLeft[1])]
             else:
+                print("has met yet")
+                exit()
                 region = A[int(knee_right):int(hipLeft[1]),int(hipLeft[0]):int(hipRight[0])]
+                pt_start = [int(hipLeft[0]),int(knee_right)]
         else:
             # check which hip is lower
             # extract rectangle from the tree points depending on each other position
             if (int(hipRight[1])<int(knee_right)):
+                print("has met yet")
+                exit()
                 region = A[int(hipLeft[1]):int(knee_right),int(hipRight[0]):int(hipLeft[0])]
+                pt_start = [int(hipRight[0]),int(hipLeft[1])]
             else:
+                print("has met yet")
+                exit()
                 region = A[int(knee_right):int(hipLeft[1]),int(hipRight[0]):int(hipLeft[0])]
+                pt_start = [int(hipRight[0]),int(knee_right)]
         f = np.nonzero( (region==0) )
         # Get the highest point among the point that not in the body
         d = np.argmin(f[0])
-        return np.array([f[1][d]-1+hipLeft[0],f[1][d]-1+hipLeft[1]])
+        return np.array([f[1][d]-1+pt_start[0],f[1][d]-1+pt_start[1]])
 
     
     def armSeg(self,A,B,side):
@@ -386,7 +406,7 @@ class Segmentation(object):
             shoulder =4
             elbow = 5
             wrist = 6
-        
+
 
         # First let us see the down limit thanks to the elbow and the wrist
 
@@ -397,8 +417,6 @@ class Segmentation(object):
         b_pen67 = slopesForearm[0]
         # Upperarm
         slopesUpperarm=self.findSlope(pos2D[elbow],pos2D[shoulder])
-
-
         a_pen = slopesForearm[0] + slopesUpperarm[0]
         b_pen = slopesForearm[1] + slopesUpperarm[1]
         if (a_pen == b_pen) and (a_pen==0):
@@ -428,9 +446,12 @@ class Segmentation(object):
         vect67_pen = np.array([vect67[1], -vect67[0]])
         # reorder points if necessary
         if sum(vect67_pen*vect_elbow)*sum(vect67_pen*vect_wrist)<0:
-           x = intersection_elbow[0]
-           intersection_elbow[0] = intersection_elbow[1]
-           intersection_elbow[1] = x
+            print("have never met")
+            exit()
+            x = intersection_elbow[0]
+            intersection_elbow[0] = intersection_elbow[1]
+            intersection_elbow[1] = x
+            vect_elbow = intersection_elbow[0]-pos2D[elbow]
 
         # list of the 4 points defining the corners the forearm
         pt4D = np.array([intersection_elbow[0],intersection_elbow[1],intersection_wrist[1],intersection_wrist[0]])
@@ -443,6 +464,9 @@ class Segmentation(object):
         # Get slopes for each line of the polygon
         finalSlope=self.findSlope(pt4D.transpose(),pt4D_bis.transpose())
         x = np.isnan(finalSlope[0])
+        if sum(x)!=0:
+            print("have never met")
+            exit()
         #erase all NaN in the array
         polygonSlope = np.zeros([3,finalSlope[0][~np.isnan(finalSlope[0])].shape[0]])
         polygonSlope[0]=finalSlope[0][~np.isnan(finalSlope[0])]
@@ -452,7 +476,7 @@ class Segmentation(object):
         midpoint = [(pos2D[elbow,0]+pos2D[wrist,0])/2, (pos2D[elbow,1]+pos2D[wrist,1])/2]
         ref= np.array([polygonSlope[0]*midpoint[0] + polygonSlope[1]*midpoint[1] + polygonSlope[2]]).astype(np.float32)
         #fill the polygon
-        bw_up = ( A*self.polygon_optimize(polygonSlope,ref,x.shape[0]-sum(x)) > 0 )
+        bw_up = ( A*self.polygon_optimize(polygonSlope,ref,x.shape[0]-sum(x)))
         
         # pos2D[2] = Neck
         # pos2D[3] = Head
@@ -488,11 +512,16 @@ class Segmentation(object):
         t1 = np.cross(np.insert(vect_215,vect_215.shape[0],0),np.insert(-vect65,vect65.shape[0],0))
         if t1[2]>0:
             intersection_shoulder[0] = intersection_shoulder[1]
+            print("have never met ")
+            print(side)
+            exit()
 
         if t[2]<0:
             tmp = intersection_elbow[0]
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = tmp
+            print("have never met ")
+            exit()
 
         # the upper arm need a fifth point -> Let us find it by finding the lowest x value
         # that meet the background in half of the body part
@@ -509,7 +538,7 @@ class Segmentation(object):
         else:
             ptA = np.stack((intersection_elbow[1],intersection_shoulder[1],intersection_head[1],peakArmpit,intersection_elbow[0]))
             self.upperArmPtsL = ptA
-        bw_upper = (A*self.polygonOutline(ptA)>0)
+        bw_upper = (A*self.polygonOutline(ptA))
 
         return np.array([bw_up,bw_upper])
 
@@ -523,7 +552,7 @@ class Segmentation(object):
         :return: an array containing two body parts : an upper leg and a lower leg
         """
         
-        pos2D = self.pos2D.astype(np.float64)-1
+        pos2D = self.pos2D.astype(np.float64)
 
         # Right
         if side == 0 :
@@ -567,18 +596,30 @@ class Segmentation(object):
             # Put the point in the good order in function of the angle alpha
             alpha = np.arccos(np.sum(v1*v2)/(np.sqrt(sum(v1*v1))*np.sqrt(sum(v2*v2)) ))/math.pi*180
             if abs(alpha-90)>45:
-                B = np.logical_and( (A==0),self.polygonOutline(pos2D[[20, 0, knee],:]))
+                print("check tha angle in legSeg()")
+                exit()
+                B = np.logical_and( (A),self.polygonOutline(pos2D[[20, 0, knee],:]))
                 f = np.nonzero(B)
                 d = np.argmin(np.sum( np.square(np.array([pos2D[hip,0]-f[1], pos2D[hip,1]-f[0]]).transpose()),axis=1 ))
                 intersection_rsh[1] = np.array([f[1][d],f[0][d]])
             ptA = np.stack((pos2D[0],intersection_rsh[1],intersection_knee[1],intersection_knee[0],peak1))
             self.thighPtsR = ptA
         else :
+            v1 = pos2D[knee] - pos2D[hip]
+            v2 = pos2D[0] - pos2D[hip]
+            # Put the point in the good order in function of the angle alpha
+            alpha = np.arccos(np.sum(v1*v2)/(np.sqrt(sum(v1*v1))*np.sqrt(sum(v2*v2)) ))/math.pi*180
+            if abs(alpha-90)>45:
+                print("check tha angle in legSeg()")
+                exit()
+                B = np.logical_and( (A),self.polygonOutline(pos2D[[20, 0, knee],:]))
+                f = np.nonzero(B)
+                d = np.argmin(np.sum( np.square(np.array([pos2D[hip,0]-f[1], pos2D[hip,1]-f[0]]).transpose()),axis=1 ))
+                intersection_rsh[0] = np.array([f[1][d],f[0][d]])
             ptA = np.stack((pos2D[0],intersection_rsh[0],intersection_knee[0],intersection_knee[1],peak1))  
             self.thighPtsL = ptA
         # Fill up the polygon
-        bw_up = ( (A*self.polygonOutline(ptA))>0 )
-        
+        bw_up = ( (A*self.polygonOutline(ptA)))
         ## Find Calf
         # Define slopes
         a_pen = slopeCalf[1]
@@ -593,7 +634,7 @@ class Segmentation(object):
         else:
             self.calfPtsL = ptA
         # Fill up the polygon
-        bw_down = (A*self.polygonOutline(ptA)>0)
+        bw_down = (A*self.polygonOutline(ptA))
         return np.array([bw_up,bw_down])
     
     def headSeg(self,A):
@@ -648,7 +689,7 @@ class Segmentation(object):
         midpoint = [pos2D[3,0], pos2D[3,1]]
         ref= np.array([HeadSlope[0]*midpoint[0] + HeadSlope[1]*midpoint[1] + HeadSlope[2]]).astype(np.float32)
         # fill up the polygon
-        bw_head = ( A*self.polygon_optimize(HeadSlope,ref,HeadSlope.shape[0]) > 0 )  
+        bw_head = ( A*self.polygon_optimize(HeadSlope,ref,HeadSlope.shape[0]))  
         return bw_head
 
     def GetBody(self,binaryImage):
@@ -683,7 +724,7 @@ class Segmentation(object):
         # Left side
         else :
             idx =7
-        pos2D = self.pos2D
+        pos2D = self.pos2D-1  
 
         #create a sphere of radius 12 so that anything superior does not come in the feet label
         handDist = 12# LA.norm( (pos2D[16]-pos2D[12])/1.5).astype(np.int16)
@@ -693,8 +734,8 @@ class Segmentation(object):
         mask = np.ones([line,col,2])
         mask = mask*pos2D[idx]
         #create a matrix containing in each pixel its index
-        lineIdx = np.array([np.arange(line) for _ in range(col)]).reshape(col,line).transpose()
-        colIdx = np.array([np.arange(col) for _ in range(line)]).reshape(line,col)
+        lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
+        colIdx = np.array([np.arange(col) for _ in range(line)])
         ind = np.stack( (colIdx,lineIdx), axis = 2)
         #compute the distance between the skeleton point of feet and each pixel
         mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
@@ -725,7 +766,7 @@ class Segmentation(object):
         # Left Side
         else :
             idx =15
-        pos2D = self.pos2D
+        pos2D = self.pos2D-1
 
         #create a sphere mask of radius 12 so that anything superior does not come in the feet label
         footDist = 12# LA.norm( (pos2D[16]-pos2D[12])/1.5).astype(np.int16)
@@ -735,8 +776,8 @@ class Segmentation(object):
         mask = np.ones([line,col,2])
         mask = mask*pos2D[idx]
         #create a matrix containing in each pixel its index
-        lineIdx = np.array([np.arange(line) for _ in range(col)]).reshape(col,line).transpose()
-        colIdx = np.array([np.arange(col) for _ in range(line)]).reshape(line,col)
+        lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
+        colIdx = np.array([np.arange(col) for _ in range(line)])
         ind = np.stack( (colIdx,lineIdx), axis = 2)
         #compute the distance between the skeleton point of feet and each pixel
         mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
