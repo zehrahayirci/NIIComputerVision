@@ -700,7 +700,7 @@ class Segmentation(object):
         :return: trunk
         """
 
-        pos2D = self.pos2D
+        pos2D = self.pos2D-1
         # find all connected component and label it
         labeled, n = spm.label(binaryImage)
         # Get the labelled  of the connected component that have the trunk
