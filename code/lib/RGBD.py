@@ -363,7 +363,7 @@ class RGBD():
         maxH = np.max(pos2D[:,0])
         # distance head to neck. Let us assume this is enough for all borders
         distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)
-        Box = self.lImages[0,self.Index]
+        Box = self.depth_image
         bwBox = self.bw[0,self.Index]
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
@@ -381,7 +381,7 @@ class RGBD():
         :return: The connected component that contain the body
         """
         pos2D = self.CroppedPos
-        max_value = np.iinfo(np.uint16).max # = 65535 for uint16
+        max_value = 1
         self.CroppedBox = self.CroppedBox.astype(np.uint16)
         # Threshold according to detph of the body
         bdyVals = self.CroppedBox[pos2D[self.connection[:,0]-1,1]-1,pos2D[self.connection[:,0]-1,0]-1]

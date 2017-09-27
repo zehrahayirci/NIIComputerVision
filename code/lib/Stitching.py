@@ -79,7 +79,7 @@ class Stitch():
         """
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Pose[0:3,0:3].T)
-        return nmle[:,0:3]
+        return nmle
 
     def RArmsTransform(self, angle,bp, pos2d,RGBD,Tg):
         """

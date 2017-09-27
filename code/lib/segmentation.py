@@ -106,7 +106,7 @@ class Segmentation(object):
                 y = y-1
                 # keep track of the perpendicular slope
                 x = int(np.round(-(b*y+c)/a))
-                inImage = (x>0) and (x<=col) and (y>0) and (y<=line)
+                inImage = (x>0) and (x<col) and (y>0) and (y<line)
                 if(inImage):
                     # if an edge is reached
                     if A[y,x]==0:
@@ -130,7 +130,7 @@ class Segmentation(object):
                 y = y+1
                 # keep track of the perpendicular slope
                 x = int(np.round(-(b*y+c)/a))
-                inImage = (x>0) and (x<=col) and (y>0) and (y<=line)
+                inImage = (x>0) and (x<col) and (y>0) and (y<line)
                 if(inImage):
                     # if an edge is reached
                     if A[y,x]==0:
@@ -161,7 +161,7 @@ class Segmentation(object):
                 x = x-1
                 # keep the track of the perpendicular slope
                 y = int(np.round(-(a*x+c)/b))
-                inImage = (x>0) and (x<=col) and (y>0) and (y<=line)
+                inImage = (x>0) and (x<col) and (y>0) and (y<line)
                 if inImage:
                     # if an edge is reached
                     if A[int(y),int(x)]==0:
@@ -185,7 +185,7 @@ class Segmentation(object):
                 x = x+1
                 # keep the track of the perpendicular slope
                 y = int(np.round(-(a*x+c)/b))
-                inImage = (x>0) and (x<=col) and (y>0) and (y<=line)
+                inImage = (x>0) and (x<col) and (y>0) and (y<line)
                 if inImage:
                     # if an edge is reached
                     if A[int(y),int(x)]==0:
@@ -447,7 +447,7 @@ class Segmentation(object):
         # reorder points if necessary
         if sum(vect67_pen*vect_elbow)*sum(vect67_pen*vect_wrist)<0:
             print("have never met")
-            exit()
+            #exit()
             x = intersection_elbow[0]
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = x
@@ -466,7 +466,7 @@ class Segmentation(object):
         x = np.isnan(finalSlope[0])
         if sum(x)!=0:
             print("have never met")
-            exit()
+            #exit()
         #erase all NaN in the array
         polygonSlope = np.zeros([3,finalSlope[0][~np.isnan(finalSlope[0])].shape[0]])
         polygonSlope[0]=finalSlope[0][~np.isnan(finalSlope[0])]
@@ -514,14 +514,14 @@ class Segmentation(object):
             intersection_shoulder[0] = intersection_shoulder[1]
             print("have never met ")
             print(side)
-            exit()
+            #exit()
 
         if t[2]<0:
             tmp = intersection_elbow[0]
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = tmp
             print("have never met ")
-            exit()
+            #exit()
 
         # the upper arm need a fifth point -> Let us find it by finding the lowest x value
         # that meet the background in half of the body part
@@ -534,10 +534,10 @@ class Segmentation(object):
         # create the upperarm polygon out the five point defining it
         if side != 0 :
             ptA = np.stack((intersection_elbow[0],intersection_shoulder[0],intersection_head[0],peakArmpit,intersection_elbow[1]))
-            self.upperArmPtsR = ptA
+            self.upperArmPtsL = ptA
         else:
             ptA = np.stack((intersection_elbow[1],intersection_shoulder[1],intersection_head[1],peakArmpit,intersection_elbow[0]))
-            self.upperArmPtsL = ptA
+            self.upperArmPtsR = ptA
         bw_upper = (A*self.polygonOutline(ptA))
 
         return np.array([bw_up,bw_upper])
@@ -783,10 +783,15 @@ class Segmentation(object):
         mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
         mask = (mask < footDist)
         mask = mask * binaryImage
-
+        
         # compute the body part as it is done for the head
         labeled, n = spm.label(mask)
         threshold = labeled[pos2D[idx,1],pos2D[idx,0]]
+        if(threshold==0): # meet hole and noise in depth image
+            offset = 1
+            while labeled[pos2D[idx,1],pos2D[idx,0]+offset]==0:
+                offset += 1
+            threshold = labeled[pos2D[idx,1],pos2D[idx,0]+offset]
         labeled = (labeled==threshold)
         return labeled
     

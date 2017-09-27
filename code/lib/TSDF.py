@@ -78,7 +78,7 @@ class TSDFManager():
         """
         Update the TSDF volume with Image
         :param Image: RGBD image to update to its surfaces
-        :param Pose: transform from the first camera pose to the last camera pose
+        :param Pose: transform from the first camera pose to the last camera pose (include local coordinate to global coordinate)
         :return: none
         """
         # initialize buffers

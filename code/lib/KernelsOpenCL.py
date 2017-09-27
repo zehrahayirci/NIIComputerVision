@@ -84,9 +84,8 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
             float prev_weight = (float)(Weight[idx]);
             
             TSDF[idx] =  (short int)(round(((prev_tsdf*prev_weight+dist)/(prev_weight+1.0f))*convVal));
-            if (dist < 1.0f && dist > -1.0f)
-                Weight[idx] = min(1000, Weight[idx]+1);
-            
+            Weight[idx] = min(1000, Weight[idx]+1);
+
          }
         
 }
