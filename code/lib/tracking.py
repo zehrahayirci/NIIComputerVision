@@ -517,9 +517,9 @@ class Tracker():
                 
                 # For each pixel find correspondinng point by projection
                 Buffer = np.zeros((Size[0], 6), dtype = np.float32)
-                Buffer_B = np.zeros((Size[0], 1), dtype = np.float32)
-                stack_pix = np.ones(Size[0], dtype = np.float32)
-                stack_pt = np.ones(np.size(MeshVtx[ ::l,:],0), dtype = np.float32)
+                Buffer_B = np.zeros((Size[0]), dtype = np.float32)
+                stack_pix = np.ones(Size[0], dtype = np.float32) 
+                stack_pt = np.ones(np.size(MeshVtx[ ::l,:],0), dtype = np.float32) 
                 pix = np.zeros((Size[0], 2), dtype = np.float32)
                 pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
                 pt = np.stack((MeshVtx[ ::l, 0],MeshVtx[ ::l, 1],MeshVtx[ ::l, 2],stack_pt),axis = 1)
@@ -541,7 +541,6 @@ class Tracker():
                 pix = np.dot(NewImage.intrinsic,pix[0:Size[0],0:Size[1]].T).T
                 column_index = (np.round(pix[:,0])).astype(int)
                 line_index = (np.round(pix[:,1])).astype(int)
-                
                 
                 # create matrix that have 0 when the conditions are not verified and 1 otherwise
                 cdt_column = (column_index > -1) * (column_index < NewImage.Size[1])
@@ -590,15 +589,13 @@ class Tracker():
                       w*mask[:]*(- NewImage.Vtx[line_index[:], column_index[:]][:,0]*nmle[:,2] + NewImage.Vtx[line_index[:], column_index[:]][:,2]*nmle[:,0] ), \
                       w*mask[:]*(NewImage.Vtx[line_index[:], column_index[:]][:,0]*nmle[:,1] - NewImage.Vtx[line_index[:], column_index[:]][:,1]*nmle[:,0]) ) , axis = 1)
                 # residual
-                Buffer_B[:] = ((w*mask[:]*(nmle[:,0]*(NewImage.Vtx[line_index[:], column_index[:]][:,0] - pt[:,0])\
+                Buffer_B[:] = (w*mask[:]*(nmle[:,0]*(NewImage.Vtx[line_index[:], column_index[:]][:,0] - pt[:,0])\
                                                       + nmle[:,1]*(NewImage.Vtx[line_index[:], column_index[:]][:,1] - pt[:,1])\
-                                                      + nmle[:,2]*(NewImage.Vtx[line_index[:], column_index[:]][:,2] - pt[:,2])) ).transpose()).reshape(Buffer_B[:].shape)
-
+                                                      + nmle[:,2]*(NewImage.Vtx[line_index[:], column_index[:]][:,2] - pt[:,2])) )
                 # Solving sum(A.t * A) = sum(A.t * b) ref newcombe kinect fusion
                 # fisrt part of the linear equation
                 A = np.dot(Buffer.transpose(), Buffer)
-                b = np.dot(Buffer.transpose(), Buffer_B).reshape(6)
-
+                b = np.dot(Buffer.transpose(), Buffer_B)
                 
                 sign,logdet = LA.slogdet(A)
                 det = sign * np.exp(logdet)
@@ -612,7 +609,7 @@ class Tracker():
                 delta_qsi = -LA.tensorsolve(A, b)
                 # compute 4*4 matrix
                 delta_transfo = General.InvPose(Exponential(delta_qsi))
-                
+
                 res = np.dot(delta_transfo, res)
                 print "delta_transfo"
                 print delta_transfo
