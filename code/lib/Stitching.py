@@ -79,7 +79,7 @@ class Stitch():
         """
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Pose[0:3,0:3].T)
-        return nmle[:,0:3]
+        return nmle
 
     def RArmsTransform(self, angle,bp, pos2d,RGBD,Tg):
         """
@@ -190,7 +190,7 @@ class Stitch():
     def GetCoordSyst(self, pos2d,jt,RGBD,bp):
         '''
         This function compute the coordinates system of a body part according to the camera pose
-        :param pos2d: camera pose
+        :param pos2d: position in 2D of the junctions
         :param jt: junctions of the body parts
         :param RGBD: Image
         :param bp: number of body part
@@ -200,6 +200,7 @@ class Stitch():
         ctr = np.array([0.0, 0.0, 0.0], np.float)
         Tg = RGBD.TransfoBB[bp]
         z = Tg[2,3]
+        pos2d = pos2d-1
         if bp < 9 or bp == 12:
             Xm = (pos2d[jt[0], 0] + pos2d[jt[1], 0]) / 2
             Ym = (pos2d[jt[0], 1] + pos2d[jt[1], 1]) / 2

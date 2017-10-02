@@ -34,8 +34,8 @@ class RGBD():
         :param intrinsic: matrix with calibration parameters
         :param fact: factor for converting pixel value to meter or conversely
         """
-        self.depthname = depthname
-        self.colorname = colorname
+        self.depthname = depthname # useless
+        self.colorname = colorname # useless
         self.intrinsic = intrinsic
         self.fact = fact
         
@@ -49,7 +49,7 @@ class RGBD():
         :return:  none
         """
         self.lImages = Images
-        self.numbImages = len(self.lImages.transpose())
+        self.numbImages = len(self.lImages.transpose()) # useless
         self.Index = -1
         self.pos2d = Pos_2D
         self.connection = BodyConnection
@@ -87,7 +87,7 @@ class RGBD():
         self.Size = (size_depth[0], size_depth[1], 3)
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
         self.depth_image = depth_in.astype(np.float32) / self.fact
-        self.skel = self.depth_image.copy()
+        # self.skel = self.depth_image.copy() # useless
 
     #####################################################################
     ################### Map Conversion Functions #######################
@@ -155,14 +155,14 @@ class RGBD():
         """
         self.Nmls = np.zeros(self.Size, np.float32)
         # matrix of normales for each direction
-        nmle1 = General.normalized_cross_prod_optimize(self.Vtx[2:self.Size[0]  ][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[1:self.Size[0]-1][:,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])        
-        nmle2 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1][:,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[0:self.Size[0]-2][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])
-        nmle3 = General.normalized_cross_prod_optimize(self.Vtx[0:self.Size[0]-2][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[1:self.Size[0]-1][:,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])
-        nmle4 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1][:,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1], \
-                                               self.Vtx[2:self.Size[0]  ][:,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1][:,1:self.Size[1]-1])
+        nmle1 = General.normalized_cross_prod_optimize(self.Vtx[2:self.Size[0],1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[1:self.Size[0]-1,2:self.Size[1]] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])        
+        nmle2 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[0:self.Size[0]-2,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
+        nmle3 = General.normalized_cross_prod_optimize(self.Vtx[0:self.Size[0]-2,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[1:self.Size[0]-1,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
+        nmle4 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1,0:self.Size[1]-2] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
+                                               self.Vtx[2:self.Size[0],1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
         nmle = (nmle1 + nmle2 + nmle3 + nmle4)/4.0
         # normalized
         norm_mat_nmle = np.sqrt(np.sum(nmle*nmle,axis=2))
@@ -241,21 +241,22 @@ class RGBD():
         # if in 1D pix[1] = pt[1]/pt[2]
         pix[ ::s, ::s,1] = (lpt[1]/lpt[2]).reshape(np.size(self.Vtx[ ::s, ::s,:],0), np.size(self.Vtx[ ::s, ::s,:],1))
         pix = np.dot(self.intrinsic,pix[0:self.Size[0],0:self.Size[1]].transpose(0,2,1)).transpose(1,2,0)
-        column_index = (np.round(pix[:,:,0])).astype(int)
-        line_index = (np.round(pix[:,:,1])).astype(int)
+        column_index = (np.round(pix[::s,::s,0])).astype(int)
+        line_index = (np.round(pix[::s,::s,1])).astype(int)
         # create matrix that have 0 when the conditions are not verified and 1 otherwise
         cdt_column = (column_index > -1) * (column_index < self.Size[1])
         cdt_line = (line_index > -1) * (line_index < self.Size[0])
-        line_index = line_index*cdt_line
-        column_index = column_index*cdt_column
+        cdt = cdt_column*cdt_line
+        line_index = line_index*cdt
+        column_index = column_index*cdt
         if (color == 0):
             result[line_index[:][:], column_index[:][:]]= np.dstack((self.color_image[ ::s, ::s,2], \
                                                                      self.color_image[ ::s, ::s,1]*cdt_line, \
                                                                      self.color_image[ ::s, ::s,0]*cdt_column) )
         else:
-            result[line_index[:][:], column_index[:][:]]= np.dstack( ( (nmle[ :, :,0]+1.0)*(255./2.), \
-                                                                       ((nmle[ :, :,1]+1.0)*(255./2.))*cdt_line, \
-                                                                       ((nmle[ :, :,2]+1.0)*(255./2.))*cdt_column ) ).astype(int)
+            result[line_index[:][:], column_index[:][:]]= np.dstack( ( (nmle[ ::s, ::s,0]+1.0)*(255./2.)*cdt, \
+                                                                       ((nmle[ ::s, ::s,1]+1.0)*(255./2.))*cdt, \
+                                                                       ((nmle[ ::s, ::s,2]+1.0)*(255./2.))*cdt ) ).astype(int)
         return result
 
 
@@ -283,8 +284,8 @@ class RGBD():
         # projection in 2D space
         lpt = np.split(pt,4,axis=1)
         lpt[2] = General.in_mat_zero2one(lpt[2])
-        pix[ ::s,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
-        pix[ ::s,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
+        pix[ :,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
+        pix[ :,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ ::s,:],0))
         pix = np.dot(pix,self.intrinsic.T)
 
         column_index = (np.round(pix[:,0])).astype(int)
@@ -292,19 +293,21 @@ class RGBD():
         # create matrix that have 0 when the conditions are not verified and 1 otherwise
         cdt_column = (column_index > -1) * (column_index < self.Size[1])
         cdt_line = (line_index > -1) * (line_index < self.Size[0])
-        line_index = line_index*cdt_line
-        column_index = column_index*cdt_column
+        cdt = cdt_column*cdt_line
+        line_index = line_index*cdt
+        column_index = column_index*cdt
         if (color == 0):
-            result[line_index[:], column_index[:]]= np.dstack((self.color_image[ ::s, ::s,2], \
-                                                                    self.color_image[ ::s, ::s,1]*cdt_line, \
-                                                                    self.color_image[ ::s, ::s,0]*cdt_column) )
+            result[line_index[:], column_index[:]]= np.dstack((self.color_image[ line_index[:], column_index[:],2]*cdt, \
+                                                                    self.color_image[ line_index[:], column_index[:],1]*cdt, \
+                                                                    self.color_image[ line_index[:], column_index[:],0]*cdt) )
         else:
-            result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ :,0]+1.0)*(255./2.), \
-                                                                       ((nmle[ :,1]+1.0)*(255./2.))*cdt_line, \
-                                                                       ((nmle[ :,2]+1.0)*(255./2.))*cdt_column ) ).astype(int)
+            result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ ::s,0]+1.0)*(255./2.)*cdt, \
+                                                                       ((nmle[ ::s,1]+1.0)*(255./2.))*cdt, \
+                                                                       ((nmle[ ::s,2]+1.0)*(255./2.))*cdt ) ).astype(int)
         return result  
 
 
+    # useless
     def Transform(self, Pose):
         """
         Transform Vertices and Normales with the Pose matrix (generally camera pose matrix)
@@ -360,7 +363,7 @@ class RGBD():
         maxH = np.max(pos2D[:,0])
         # distance head to neck. Let us assume this is enough for all borders
         distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)
-        Box = self.lImages[0,self.Index]
+        Box = self.depth_image
         bwBox = self.bw[0,self.Index]
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
@@ -378,7 +381,7 @@ class RGBD():
         :return: The connected component that contain the body
         """
         pos2D = self.CroppedPos
-        max_value = np.iinfo(np.uint16).max # = 65535 for uint16
+        max_value = 1
         self.CroppedBox = self.CroppedBox.astype(np.uint16)
         # Threshold according to detph of the body
         bdyVals = self.CroppedBox[pos2D[self.connection[:,0]-1,1]-1,pos2D[self.connection[:,0]-1,0]-1]
@@ -421,20 +424,20 @@ class RGBD():
         legRight = self.segm.legSeg(imageWBG,right)
         legLeft = self.segm.legSeg(imageWBG,left)
         head = self.segm.headSeg(imageWBG)
-        
+
         # Retrieve every already segmentated part to the main body.
         tmp = armLeft[0]+armLeft[1]+armRight[0]+armRight[1]+legRight[0]+legRight[1]+legLeft[0]+legLeft[1]+head
-        MidBdyImage =((imageWBG-(tmp>0))>0)
+        MidBdyImage =(imageWBG-(tmp>0))
 
         # display result
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
         # cv2.waitKey(0)
 
         # continue segmentation for hands and feet
-        handRight = ( self.segm.GetHand( MidBdyImage,right)>0)
-        handLeft = ( self.segm.GetHand( MidBdyImage,left)>0)
-        footRight = ( self.segm.GetFoot( MidBdyImage,right)>0)
-        footLeft = ( self.segm.GetFoot( MidBdyImage,left)>0)
+        handRight = ( self.segm.GetHand( MidBdyImage,right))
+        handLeft = ( self.segm.GetHand( MidBdyImage,left))
+        footRight = ( self.segm.GetFoot( MidBdyImage,right))
+        footLeft = ( self.segm.GetFoot( MidBdyImage,left))
 
         # display the trunck
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
@@ -442,7 +445,7 @@ class RGBD():
 
         # Retrieve again every newly computed segmentated part to the main body.
         tmp2 = handRight+handLeft+footRight+footLeft
-        MidBdyImage2 =((MidBdyImage-(tmp2>0))>0)
+        MidBdyImage2 =(MidBdyImage-(tmp2))
 
         # Display result
         # cv2.imshow('MidBdyImage2' , MidBdyImage2.astype(np.float))
@@ -539,7 +542,7 @@ class RGBD():
         e2b = np.array( [e2[0],e2[1],e2[2],0])
         e3b = np.array( [e3[0],e3[1],e3[2],0])
         #center of coordinates system
-        origine = np.array( [ctr[0],self.ctr3D[i][1],ctr[2],1])
+        origine = np.array( [ctr[0],ctr[1],ctr[2],1])
         # concatenate it in the right order.
         Transfo = np.stack( (e1b,e2b,e3b,origine),axis = 0 )
         self.TransfoBB.append(Transfo.transpose())
@@ -597,6 +600,7 @@ class RGBD():
     
            
     def myPCA(self, dims_rescaled_data=3):
+        # dims_rescaled_data useless
         """
         Compute the principal component analysis on a cloud of points
         to get the coordinates system local to the cloud of points
@@ -714,12 +718,11 @@ class RGBD():
             drawVects.append(np.array([column_index,line_index]))
         return drawVects
             
-    def GetProjPts2D_optimize(self, vects3D, Pose, s=1) :
+    def GetProjPts2D_optimize(self, vects3D, Pose) :
         """
         Project a list of vertexes in the image RGBD. Optimize for CPU version.
         :param vects3D: list of 3 elements vector
         :param Pose: Transformation matrix
-        :param s: subsampling coefficient
         :return: transformed list of 3D vector
         """
         '''Project a list of vertexes in the image RGBD'''
@@ -742,7 +745,7 @@ class RGBD():
 
 
             
-    def GetNewSys(self, Pose,ctr2D,nbPix, s=1) : 
+    def GetNewSys(self, Pose,ctr2D,nbPix) : 
         '''
         compute the coordinates of the points that will create the coordinates system
         '''
@@ -750,8 +753,7 @@ class RGBD():
         maxDepth = max(0.0001, np.max(self.Vtx[:,:,2]))
 
         for i in range(1,len(self.vects3D)):
-            self.vects3D[i] = np.dot(self.vects3D[i],Pose[0:3,0:3].T )
-            vect = self.vects3D[i]
+            vect = np.dot(self.vects3D[i],Pose[0:3,0:3].T )
             newPt = np.zeros(vect.shape)
             for j in range(vect.shape[0]):
                 newPt[j][0] = ctr2D[i][0]-nbPix*vect[j][0]

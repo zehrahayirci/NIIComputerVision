@@ -56,18 +56,45 @@ class Application(tk.Frame):
             Transfo[2,3] = -0.1
         if (event.keysym == 'c'):
             self.color_tag = (self.color_tag+1) %2
+        if(event.keysym == 'u'):
+            self.skeleton_tag = ~self.skeleton_tag
+        if(event.keysym == 'i'):
+            self.center_tag = ~self.center_tag
+        if(event.keysym == 'o'):
+            self.Sys_tag = ~self.Sys_tag
+        if(event.keysym == 'p'):
+            self.OBBox_tag = ~self.OBBox_tag
+        if(event.keysym == 'l'):
+            self.first_tag = ~self.first_tag
 
         if (event.keysym != 'Escape'):
-            self.Pose = np.dot(self.Pose, Transfo)
+            self.Pose = np.dot(Transfo, self.Pose)
             rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
-            rendering = self.RGBD[0].Draw_optimize(rendering,self.Pose, self.w.get(), self.color_tag)
+            if(self.first_tag):
+                rendering = self.RGBD[0].Draw_optimize(rendering,self.Pose, self.w.get(), self.color_tag)
+            else:
+                # Projection for each body parts done separately
+                PoseBP = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+                for bp in range(1,len(self.Parts)):
+                    bou = bp
+                    for i in range(4):
+                        for j in range(4):
+                            PoseBP[i][j] = self.Parts[bou].Tlg[i][j]
+                    PoseBP = np.dot(self.Pose, PoseBP)
+                    rendering = self.RGBD[0].DrawMesh(rendering,self.Parts[bou].MC.Vertices,self.Parts[bou].MC.Normales,PoseBP, self.w.get(), self.color_tag)
+
             img = Image.fromarray(rendering, 'RGB')
             self.imgTk=ImageTk.PhotoImage(img)
             self.canvas.create_image(0, 0, anchor=tk.NW, image=self.imgTk)
-            #self.DrawSkeleton2D(self.Pose)
-            #self.DrawCenters2D(self.Pose)
-            #self.DrawSys2D(self.Pose)
-            #self.DrawOBBox2D(self.Pose)
+            if(self.skeleton_tag):
+                self.DrawSkeleton2D(self.Pose)
+            if(self.center_tag):
+                self.DrawCenters2D(self.Pose)
+            if(self.Sys_tag):
+                self.DrawCenters2D(self.Pose)
+                self.DrawSys2D(self.Pose)
+            if(self.OBBox_tag):
+                self.DrawOBBox2D(self.Pose)
 
 
 
@@ -98,42 +125,62 @@ class Application(tk.Frame):
         :param event: moving mouse when a button is pressed
         :return: none
         """
-        if (event.y < 480):
+        if (event.y < 426):
             delta_x = event.x - self.x_init
             delta_y = event.y - self.y_init
             
             angley = 0.
             if (delta_x > 0.):
-                angley = -0.01
+                angley = -0.02
             elif (delta_x < 0.):
-                angley = 0.01 #pi * 2. * delta_x / float(self.Size[0])
+                angley = 0.02 #pi * 2. * delta_x / float(self.Size[0])
             RotY = np.array([[cos(angley), 0., sin(angley), 0.], \
                              [0., 1., 0., 0.], \
                              [-sin(angley), 0., cos(angley), 0.], \
                              [0., 0., 0., 1.]])
-            self.Pose = np.dot(self.Pose, RotY)
+            #self.Pose = np.dot(self.Pose, RotY)
             
             anglex = 0.
             if (delta_y > 0.):
-                anglex = 0.01
+                anglex = 0.02
             elif (delta_y < 0.):
-                anglex = -0.01 # pi * 2. * delta_y / float(self.Size[0])
+                anglex = -0.02 # pi * 2. * delta_y / float(self.Size[0])
             RotX = np.array([[1., 0., 0., 0.], \
                             [0., cos(anglex), -sin(anglex), 0.], \
                             [0., sin(anglex), cos(anglex), 0.], \
                             [0., 0., 0., 1.]])
-
-            self.Pose = np.dot(self.Pose, RotX)
-            rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            Transla_in = np.array([[1., 0., 0., -self.Pose[0][3]-self.RGBD[0].ctr3D[11][0]], [0., 1., 0., -self.Pose[1][3]-self.RGBD[0].ctr3D[11][1]], [0., 0., 1., -self.Pose[2][3]-self.RGBD[0].ctr3D[11][2]], [0., 0., 0., 1.]])
+            Transla = np.array([[1., 0., 0., self.Pose[0][3]+self.RGBD[0].ctr3D[11][0]], [0., 1., 0., +self.Pose[1][3]+self.RGBD[0].ctr3D[11][1]], [0., 0., 1., +self.Pose[2][3]+self.RGBD[0].ctr3D[11][2]], [0., 0., 0., 1.]])
+            #self.Pose = np.dot(self.Pose, RotX)
+            self.Pose = np.dot(Transla, np.dot(RotX, np.dot(RotY, np.dot(Transla_in,self.Pose))))
+        
+        rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        if(self.first_tag):
             rendering = self.RGBD[0].Draw_optimize(rendering,self.Pose, self.w.get(), self.color_tag)
-            img = Image.fromarray(rendering, 'RGB')
-            self.imgTk=ImageTk.PhotoImage(img)
-            self.canvas.create_image(0, 0, anchor=tk.NW, image=self.imgTk)
-            #self.DrawSkeleton2D(self.Pose)
-            #self.DrawCenters2D(self.Pose)
-            #self.DrawSys2D(self.Pose)
-            #self.DrawOBBox2D(self.Pose)
-       
+        else:
+            # Projection for each body parts done separately
+            PoseBP = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+            for bp in range(1,len(self.Parts)):
+                bou = bp
+                for i in range(4):
+                    for j in range(4):
+                        PoseBP[i][j] = self.Parts[bou].Tlg[i][j]
+                PoseBP = np.dot(self.Pose, PoseBP)
+                rendering = self.RGBD[0].DrawMesh(rendering,self.Parts[bou].MC.Vertices,self.Parts[bou].MC.Normales,PoseBP, self.w.get(), self.color_tag)
+
+        img = Image.fromarray(rendering, 'RGB')
+        self.imgTk=ImageTk.PhotoImage(img)
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.imgTk)
+        if(self.skeleton_tag):
+            self.DrawSkeleton2D(self.Pose)
+        if(self.center_tag):
+            self.DrawCenters2D(self.Pose)
+        if(self.Sys_tag):
+            self.DrawCenters2D(self.Pose)
+            self.DrawSys2D(self.Pose)
+        if(self.OBBox_tag):
+            self.DrawOBBox2D(self.Pose)
+            
         self.x_init = event.x
         self.y_init = event.y
 
@@ -184,7 +231,9 @@ class Application(tk.Frame):
         :return:
                 Adding an argument pose would enable to follow the transformation
         """
-        pos = self.pos2d[0][self.Index]
+        pos2D = self.pos2d[0][self.Index].astype(np.int16)-1
+        pos = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].Vtx[pos2D[:,1], pos2D[:,0]],Pose)
+ 
         for i in range(np.size(self.connection,0)): 
             pt1 = (pos[self.connection[i,0]-1,0],pos[self.connection[i,0]-1,1])
             pt2 = (pos[self.connection[i,1]-1,0],pos[self.connection[i,1]-1,1])
@@ -196,26 +245,26 @@ class Application(tk.Frame):
 
     def DrawCenters2D(self,Pose,s=1):
         '''this function draw the center of each oriented coordinates system for each body part''' 
-        self.ctr2D = self.RGBD.GetProjPts2D_optimize(self.RGBD.ctr3D,Pose)        
-        for i in range(1, len(self.RGBD.ctr3D)):
+        self.ctr2D = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].ctr3D,Pose)        
+        for i in range(1, len(self.RGBD[0].ctr3D)):
             c = self.ctr2D[i]
             self.DrawPoint2D(c,2,"yellow")
 
     def DrawSys2D(self,Pose):
         '''this function draw the sys of oriented coordinates system for each body part'''
         # Compute the coordinates system of each body parts
-        self.RGBD.GetNewSys(Pose,self.ctr2D,10)
+        self.RGBD[0].GetNewSys(Pose,self.ctr2D,10)
         # Draw it
         for i in range(1,len(self.ctr2D)):
             # Get points to draw the coordinate system
             c = self.ctr2D[i]
-            pt0 = self.RGBD.drawNewSys[i-1][0]
-            pt1 = self.RGBD.drawNewSys[i-1][1]
-            pt2 = self.RGBD.drawNewSys[i-1][2]
+            pt0 = self.RGBD[0].drawNewSys[i-1][0]
+            pt1 = self.RGBD[0].drawNewSys[i-1][1]
+            pt2 = self.RGBD[0].drawNewSys[i-1][2]
             # Draw the line of the coordinate system
-            self.canvas.create_line(pt0[0],pt0[1],c[0],c[1],fill="gray",width = 2)
-            self.canvas.create_line(pt1[0],pt1[1],c[0],c[1],fill="gray",width = 2)
-            self.canvas.create_line(pt2[0],pt2[1],c[0],c[1],fill="gray",width = 2)
+            self.canvas.create_line(pt0[0],pt0[1],c[0],c[1],fill="red",width = 2)
+            self.canvas.create_line(pt1[0],pt1[1],c[0],c[1],fill="green",width = 2)
+            self.canvas.create_line(pt2[0],pt2[1],c[0],c[1],fill="blue",width = 2)
 
     def DrawOBBox2D(self,Pose):
         '''
@@ -254,8 +303,8 @@ class Application(tk.Frame):
         self.root = master
         self.path = path
         self.GPUManager = GPUManager
-        self.draw_bump = False
-        self.draw_spline = False
+        self.draw_bump = False # useless
+        self.draw_spline = False # useless
 
         tk.Frame.__init__(self, master)
         self.pack()
@@ -276,7 +325,9 @@ class Application(tk.Frame):
         TimeStart = time.time()
 
         #load data
-        mat = scipy.io.loadmat(path + '/String4b.mat')
+        path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset_0922'
+        mat = scipy.io.loadmat(path2 + '/071_0915_01.mat')
+        #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
         bdyIdx = mat['BodyIndex']
@@ -289,8 +340,9 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 0
-        nunImg = 10
+        self.Index = 25
+        nunImg = 100
+        sImg = 6
 
         # Former Depth Image (i.e: i)
         self.RGBD = []
@@ -312,7 +364,7 @@ class Application(tk.Frame):
             # Compute vertex map and normal map
             self.RGBD[bp].Vmap_optimize()   
             self.RGBD[bp].NMap_optimize()
-
+       
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
 
@@ -364,6 +416,16 @@ class Application(tk.Frame):
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
 
+        # show segmentation result
+        img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        img_label_temp = self.DrawColors2D(self.RGBD[0],img_label_temp)
+        img_label = img_label_temp.copy()
+        img_label[:,:,0] = img_label_temp[:,:,2]
+        img_label[:,:,1] = img_label_temp[:,:,1]
+        img_label[:,:,2] = img_label_temp[:,:,0]
+        print("0 frame")
+        cv2.imshow("0 label", img_label)
+        cv2.waitKey(1)
 
         #"""
         # initialize tracker for camera pose
@@ -372,7 +434,7 @@ class Application(tk.Frame):
         Tbbw = []
         for bp in range(nbBdyPart + 1):
             Tbbw.append(Id4)
-        for imgk in range(self.Index+1,nunImg):
+        for imgk in range(self.Index+1,nunImg, sImg):
             #Time counting
             start = time.time()
 
@@ -405,12 +467,12 @@ class Application(tk.Frame):
 
             # Transform the stitch body in the current image (alignment current image mesh) 
             # New pose estimation
-            NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, T_Pose)
+            #NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, T_Pose)
 
             # Transfert NewPose in T_Pose which can be used by GPU
-            for k in range(4):
-                for l in range(4):
-                    T_Pose[k,l] = NewPose[k,l]
+            #for k in range(4):
+                #for l in range(4):
+                    #T_Pose[k,l] = NewPose[k,l]
 
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
@@ -426,7 +488,7 @@ class Application(tk.Frame):
                 Tbb.append(StitchBdy.GetBBTransfo(self.pos2d, imgk, formerIdx, self.RGBD[0], bp))
                 Tbbw[bp] = np.dot(Tbb[bp], Tbbw[bp])
                 #update transform matrix with camera pose
-                Tg_new = np.dot(T_Pose,Tg[bp])
+                Tg_new = np.dot(Id4,Tg[bp])
                 # update trnasform matrix with skeleton tracking matrix
                 Tg_new = np.dot(Tbbw[bp],Tg_new)
                 # Put the Global transfo in PoseBP so that the dtype entered in the GPU is correct
@@ -456,11 +518,21 @@ class Application(tk.Frame):
             formerIdx = imgk
             time_lapsed = time.time() - start
             print "number %d finished : %f" %(imgk,time_lapsed)
-                    
 
             # save with the number of the body part
             imgkStr = str(imgk)
-            Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,1)
+            Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
+
+            # show segmentation result
+            img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            img_label_temp = self.DrawColors2D(newRGBD[0],img_label_temp)
+            img_label = img_label_temp.copy()
+            img_label[:,:,0] = img_label_temp[:,:,2]
+            img_label[:,:,1] = img_label_temp[:,:,1]
+            img_label[:,:,2] = img_label_temp[:,:,0]
+            print(imgkStr+" frame")
+            cv2.imshow(imgkStr+" label", img_label)
+            cv2.waitKey(1)
 
         
         TimeStart_Lapsed = time.time() - TimeStart
@@ -472,11 +544,20 @@ class Application(tk.Frame):
 
         # Projection for each body parts done separately
         for bp in range(bpstart,nbBdyPart):
-            bou = bp - bpstart + 1
+            bou = bp
             for i in range(4):
                 for j in range(4):
                     PoseBP[i][j] = Parts[bou].Tlg[i][j]
             rendering = self.RGBD[0].DrawMesh(rendering,Parts[bou].MC.Vertices,Parts[bou].MC.Normales,PoseBP, 1, self.color_tag)
+
+        # drawing tag
+        self.skeleton_tag = 0
+        self.center_tag = 0
+        self.Sys_tag = 0
+        self.OBBox_tag = 0
+        self.first_tag = 0
+        # save fused Vertices and Normals
+        self.Parts = Parts
 
         # 3D reconstruction of the whole image
         self.canvas = tk.Canvas(self, bg="black", height=self.Size[0], width=self.Size[1])
@@ -485,10 +566,14 @@ class Application(tk.Frame):
         img = Image.fromarray(rendering, 'RGB')
         self.imgTk=ImageTk.PhotoImage(img)
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.imgTk)
-        self.DrawSkeleton2D(self.Pose)
-        #self.DrawCenters2D(self.Pose)
-        #self.DrawSys2D(self.Pose)
-        self.DrawOBBox2D(self.Pose)
+        if(self.skeleton_tag):
+            self.DrawSkeleton2D(self.Pose)
+        if(self.center_tag):
+            self.DrawCenters2D(self.Pose)
+        if(self.Sys_tag):
+            self.DrawSys2D(self.Pose)
+        if(self.OBBox_tag):
+            self.DrawOBBox2D(self.Pose)
 
         #enable keyboard and mouse monitoring
         self.root.bind("<Key>", self.key)
@@ -498,5 +583,5 @@ class Application(tk.Frame):
 
         self.w = tk.Scale(master, from_=1, to=10, orient=tk.HORIZONTAL)
         self.w.pack()
-        
+        exit()
 

@@ -27,7 +27,7 @@ def InvPose(Pose):
     :param Pose: 4*4 Matrix of the camera pose
     :return: matrix containing the inverse transform of Pose
     y = R*x + T
-    x = R^(-1)*y + R^(-1)*T
+    x = R^(-1)*y - R^(-1)*T
     """
     PoseInv = np.zeros(Pose.shape, Pose.dtype)
     # Inverse rotation part R^(-1)
