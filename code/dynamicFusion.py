@@ -18,8 +18,8 @@ def main(GPUManager):
     root = tk.Tk()
     menu_app = M.Menu(root)
     menu_app.mainloop()
-    
-    A = imp.load_source('Menu', './lib/Application.py')
+
+    A = imp.load_source('Application', './lib/Application.py')
     root = tk.Tk()
     app = A.Application(menu_app.filename, GPUManager, root)
     app.mainloop()

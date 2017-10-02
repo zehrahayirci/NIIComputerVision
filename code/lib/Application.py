@@ -231,7 +231,7 @@ class Application(tk.Frame):
         :return:
                 Adding an argument pose would enable to follow the transformation
         """
-        pos2D = self.pos2d[0][self.Index]
+        pos2D = self.pos2d[0][self.Index].astype(np.int16)-1
         pos = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].Vtx[pos2D[:,1], pos2D[:,0]],Pose)
  
         for i in range(np.size(self.connection,0)): 
@@ -325,7 +325,9 @@ class Application(tk.Frame):
         TimeStart = time.time()
 
         #load data
-        mat = scipy.io.loadmat(path + '/String4b.mat')
+        path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset_0922'
+        mat = scipy.io.loadmat(path2 + '/071_0915_01.mat')
+        #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
         bdyIdx = mat['BodyIndex']
@@ -338,8 +340,9 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 0
-        nunImg = 10
+        self.Index = 25
+        nunImg = 100
+        sImg = 6
 
         # Former Depth Image (i.e: i)
         self.RGBD = []
@@ -424,14 +427,14 @@ class Application(tk.Frame):
         cv2.imshow("0 label", img_label)
         cv2.waitKey(1)
 
-        """
+        #"""
         # initialize tracker for camera pose
         Tracker = TrackManager.Tracker(0.001, 0.5, 1, [10])
         formerIdx = self.Index
         Tbbw = []
         for bp in range(nbBdyPart + 1):
             Tbbw.append(Id4)
-        for imgk in range(self.Index+1,nunImg):
+        for imgk in range(self.Index+1,nunImg, sImg):
             #Time counting
             start = time.time()
 
@@ -464,12 +467,12 @@ class Application(tk.Frame):
 
             # Transform the stitch body in the current image (alignment current image mesh) 
             # New pose estimation
-            NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, T_Pose)
+            #NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, T_Pose)
 
             # Transfert NewPose in T_Pose which can be used by GPU
-            for k in range(4):
-                for l in range(4):
-                    T_Pose[k,l] = NewPose[k,l]
+            #for k in range(4):
+                #for l in range(4):
+                    #T_Pose[k,l] = NewPose[k,l]
 
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
@@ -485,7 +488,7 @@ class Application(tk.Frame):
                 Tbb.append(StitchBdy.GetBBTransfo(self.pos2d, imgk, formerIdx, self.RGBD[0], bp))
                 Tbbw[bp] = np.dot(Tbb[bp], Tbbw[bp])
                 #update transform matrix with camera pose
-                Tg_new = np.dot(T_Pose,Tg[bp])
+                Tg_new = np.dot(Id4,Tg[bp])
                 # update trnasform matrix with skeleton tracking matrix
                 Tg_new = np.dot(Tbbw[bp],Tg_new)
                 # Put the Global transfo in PoseBP so that the dtype entered in the GPU is correct
@@ -518,7 +521,7 @@ class Application(tk.Frame):
 
             # save with the number of the body part
             imgkStr = str(imgk)
-            Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,1)
+            Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
 
             # show segmentation result
             img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -541,7 +544,7 @@ class Application(tk.Frame):
 
         # Projection for each body parts done separately
         for bp in range(bpstart,nbBdyPart):
-            bou = bp - bpstart + 1
+            bou = bp
             for i in range(4):
                 for j in range(4):
                     PoseBP[i][j] = Parts[bou].Tlg[i][j]
@@ -580,5 +583,5 @@ class Application(tk.Frame):
 
         self.w = tk.Scale(master, from_=1, to=10, orient=tk.HORIZONTAL)
         self.w.pack()
-        
+        exit()
 
