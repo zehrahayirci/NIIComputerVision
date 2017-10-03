@@ -276,6 +276,14 @@ class Segmentation(object):
         :return:  the body part filled with true.
         """
 
+        #check if there is repeat point in points
+        j=0
+        for i in range(1, points.shape[0]):
+            if(points[i,0]!=points[j,0] or points[i,1]!=points[j,1]):
+                j=j+1
+                points[j] = points[i]
+        points = points[0:j+1]
+
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]
         im_out = np.zeros([line,col],np.uint8)
@@ -354,7 +362,7 @@ class Segmentation(object):
                 region = A[int(hipLeft[1]):int(knee_right),int(hipLeft[0]):int(hipRight[0])]
                 pt_start = [int(hipLeft[0]),int(hipLeft[1])]
             else:
-                print("has met yet")
+                print("has met yet line357")
                 exit()
                 region = A[int(knee_right):int(hipLeft[1]),int(hipLeft[0]):int(hipRight[0])]
                 pt_start = [int(hipLeft[0]),int(knee_right)]
@@ -362,12 +370,12 @@ class Segmentation(object):
             # check which hip is lower
             # extract rectangle from the tree points depending on each other position
             if (int(hipRight[1])<int(knee_right)):
-                print("has met yet")
+                print("has met yet line365")
                 exit()
                 region = A[int(hipLeft[1]):int(knee_right),int(hipRight[0]):int(hipLeft[0])]
                 pt_start = [int(hipRight[0]),int(hipLeft[1])]
             else:
-                print("has met yet")
+                print("has met yet line370")
                 exit()
                 region = A[int(knee_right):int(hipLeft[1]),int(hipRight[0]):int(hipLeft[0])]
                 pt_start = [int(hipRight[0]),int(knee_right)]
@@ -434,20 +442,19 @@ class Segmentation(object):
         
         # compute the intersection between the slope and the extremety of the body
         # And get two corners of the segmented body parts
-        intersection_elbow=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[elbow],0.5*bone)
+        intersection_elbow=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[elbow],0.5*bone/2)
         vect_elbow = intersection_elbow[0]-pos2D[elbow]
-              
+        
         # Slope forearm
         c_pen67=-(a_pen67*pos2D[wrist,0]+b_pen67*pos2D[wrist,1])
         # get intersection near the wrist
-        intersection_wrist=self.inferedPoint(A,a_pen67,b_pen67,c_pen67,pos2D[wrist],bone/3)
+        intersection_wrist=self.inferedPoint(A,a_pen67,b_pen67,c_pen67,pos2D[wrist],bone/2/2)
         vect_wrist = intersection_wrist[0]-pos2D[wrist]
         vect67 = pos2D[wrist]-pos2D[elbow]
         vect67_pen = np.array([vect67[1], -vect67[0]])
         # reorder points if necessary
         if sum(vect67_pen*vect_elbow)*sum(vect67_pen*vect_wrist)<0:
-            print("have never met")
-            #exit()
+            print("have never met line449")
             x = intersection_elbow[0]
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = x
@@ -465,8 +472,8 @@ class Segmentation(object):
         finalSlope=self.findSlope(pt4D.transpose(),pt4D_bis.transpose())
         x = np.isnan(finalSlope[0])
         if sum(x)!=0:
-            print("have never met")
-            #exit()
+            print("have never met line468")
+            exit()
         #erase all NaN in the array
         polygonSlope = np.zeros([3,finalSlope[0][~np.isnan(finalSlope[0])].shape[0]])
         polygonSlope[0]=finalSlope[0][~np.isnan(finalSlope[0])]
@@ -477,7 +484,7 @@ class Segmentation(object):
         ref= np.array([polygonSlope[0]*midpoint[0] + polygonSlope[1]*midpoint[1] + polygonSlope[2]]).astype(np.float32)
         #fill the polygon
         bw_up = ( A*self.polygon_optimize(polygonSlope,ref,x.shape[0]-sum(x)))
-        
+
         # pos2D[2] = Neck
         # pos2D[3] = Head
         
@@ -511,26 +518,41 @@ class Segmentation(object):
         t = np.cross(np.insert(vect_elbow, vect_elbow.shape[0],0),np.insert(vect65, vect65.shape[0],0))
         t1 = np.cross(np.insert(vect_215,vect_215.shape[0],0),np.insert(-vect65,vect65.shape[0],0))
         if t1[2]>0:
+            tmp = intersection_shoulder[0]
             intersection_shoulder[0] = intersection_shoulder[1]
-            print("have never met ")
-            print(side)
-            #exit()
+            intersection_shoulder[1] = tmp
+            print("line515")
 
         if t[2]<0:
             tmp = intersection_elbow[0]
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = tmp
-            print("have never met ")
-            #exit()
-
+            print("line523")
+       
         # the upper arm need a fifth point -> Let us find it by finding the lowest x value
-        # that meet the background in half of the body part
-        B1 = np.logical_and( (A==0),self.polygonOutline(pos2D[[elbow, shoulder, 20, 0],:]))
-        # transform the background into 1 and body into 0
-        f = np.nonzero(B1)
-        # find the minimum in x value (vertical line up = low value, down = high value) in f
-        d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
-        peakArmpit = np.array([f[1][d],f[0][d]])
+        vect208 = pos2D[20]-pos2D[shoulder]
+        vect98  = pos2D[elbow]-pos2D[shoulder]
+        t3 = np.cross(np.insert(vect208, vect208.shape[0],0),np.insert(vect98, vect98.shape[0],0))
+        if(t3[2]>0):
+            # that meet the background in half of the body part
+            B1 = np.logical_and( (A==0),self.polygonOutline(pos2D[[elbow, shoulder, 20, 0],:]))
+            # transform the background into 1 and body into 0
+            f = np.nonzero(B1)
+            # find the minimum in x value (vertical line up = low value, down = high value) in f
+            d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
+            peakArmpit = np.array([f[1][d],f[0][d]])
+        else:
+            print("line537")
+            if(intersection_shoulder[0][1]>intersection_shoulder[1][1]):
+                peakArmpit = intersection_shoulder[0]
+            else:
+                peakArmpit = intersection_shoulder[1]
+        if(peakArmpit[1]<pos2D[20][1]):
+            print("line553")
+            if(intersection_shoulder[0][1]>intersection_shoulder[1][1]):
+                peakArmpit = intersection_shoulder[0]
+            else:
+                peakArmpit = intersection_shoulder[1]
         # create the upperarm polygon out the five point defining it
         if side != 0 :
             ptA = np.stack((intersection_elbow[0],intersection_shoulder[0],intersection_head[0],peakArmpit,intersection_elbow[1]))
@@ -538,7 +560,10 @@ class Segmentation(object):
         else:
             ptA = np.stack((intersection_elbow[1],intersection_shoulder[1],intersection_head[1],peakArmpit,intersection_elbow[0]))
             self.upperArmPtsR = ptA
+
         bw_upper = (A*self.polygonOutline(ptA))
+        cv2.imshow("", self.polygonOutline(ptA)*1.0)
+        cv2.waitKey()
 
         return np.array([bw_up,bw_upper])
 
@@ -552,7 +577,7 @@ class Segmentation(object):
         :return: an array containing two body parts : an upper leg and a lower leg
         """
         
-        pos2D = self.pos2D.astype(np.float64)
+        pos2D = self.pos2D.astype(np.float64)-1
 
         # Right
         if side == 0 :
@@ -583,12 +608,17 @@ class Segmentation(object):
             b_pen =-slopeThigh[0]
         c_pen = -(a_pen*pos2D[knee,0]+b_pen*pos2D[knee,1])
 
+        # find lenght of leg
+        bone1 = LA.norm(pos2D[knee]-pos2D[ankle])
+        bone2 = LA.norm(pos2D[knee]-pos2D[hip])
+        bone = max(bone1,bone2)
+
         # find 2 points corner of the knee
-        intersection_knee=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[knee])
+        intersection_knee=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[knee], bone/2/2)
 
         # find right side of the hip rsh
         c_rsh = -(slopeThigh[1]*pos2D[hip,0]-slopeThigh[0]*pos2D[hip,1])
-        intersection_rsh=self.inferedPoint(A,slopeThigh[1],-slopeThigh[0],c_rsh,pos2D[hip])
+        intersection_rsh=self.inferedPoint(A,slopeThigh[1],-slopeThigh[0],c_rsh,pos2D[hip], bone/1/2)
 
         if side == 0:
             v1 = pos2D[knee] - pos2D[hip]
@@ -596,7 +626,7 @@ class Segmentation(object):
             # Put the point in the good order in function of the angle alpha
             alpha = np.arccos(np.sum(v1*v2)/(np.sqrt(sum(v1*v1))*np.sqrt(sum(v2*v2)) ))/math.pi*180
             if abs(alpha-90)>45:
-                print("check tha angle in legSeg()")
+                print("check tha angle in legSeg() R")
                 exit()
                 B = np.logical_and( (A),self.polygonOutline(pos2D[[20, 0, knee],:]))
                 f = np.nonzero(B)
@@ -610,7 +640,7 @@ class Segmentation(object):
             # Put the point in the good order in function of the angle alpha
             alpha = np.arccos(np.sum(v1*v2)/(np.sqrt(sum(v1*v1))*np.sqrt(sum(v2*v2)) ))/math.pi*180
             if abs(alpha-90)>45:
-                print("check tha angle in legSeg()")
+                print("check tha angle in legSeg() L")
                 exit()
                 B = np.logical_and( (A),self.polygonOutline(pos2D[[20, 0, knee],:]))
                 f = np.nonzero(B)
@@ -627,7 +657,7 @@ class Segmentation(object):
         c_pen = -(a_pen*pos2D[ankle,0]+b_pen*pos2D[ankle,1])
 
         # find 2 points corner of the ankle
-        intersection_ankle=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[ankle])  
+        intersection_ankle=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[ankle], bone/2.5/2) 
         ptA = np.stack((intersection_ankle[1],intersection_ankle[0],intersection_knee[0],intersection_knee[1]))  
         if side == 0 :
             self.calfPtsR = ptA
@@ -678,7 +708,7 @@ class Segmentation(object):
         h = 2*(pos2D[2,1]-pos2D[3,1])
         # create point that higher than the head
         headUp_right = np.array([pos2D[8,0],pos2D[2,1]-h])
-        headUp_left = np.array([pos2D[5,0],pos2D[2,1]-h])
+        headUp_left = np.array([pos2D[4,0],pos2D[2,1]-h])
         # stock corner of the polyogne
         pt4D = np.array([headUp_right,headUp_left,headLeft,headRight])
         self.headPts = pt4D
@@ -689,7 +719,7 @@ class Segmentation(object):
         midpoint = [pos2D[3,0], pos2D[3,1]]
         ref= np.array([HeadSlope[0]*midpoint[0] + HeadSlope[1]*midpoint[1] + HeadSlope[2]]).astype(np.float32)
         # fill up the polygon
-        bw_head = ( A*self.polygon_optimize(HeadSlope,ref,HeadSlope.shape[0]))  
+        bw_head = ( A*self.polygon_optimize(HeadSlope,ref,HeadSlope.shape[1]))
         return bw_head
 
     def GetBody(self,binaryImage):
@@ -720,14 +750,19 @@ class Segmentation(object):
         """
         # Right side
         if side == 0 :
-            idx =11
+            idx = 11 #hand
+            disidx1 = 10 #wrist
+            disidx2 = 23 #hand tip
         # Left side
         else :
             idx =7
+            disidx1 = 6
+            disidx2 = 21
         pos2D = self.pos2D-1  
 
         #create a sphere of radius 12 so that anything superior does not come in the feet label
-        handDist = 12# LA.norm( (pos2D[16]-pos2D[12])/1.5).astype(np.int16)
+        handDist = 12# 
+        handDist = (max(LA.norm( (pos2D[disidx1]-pos2D[idx])), LA.norm( (pos2D[disidx2]-pos2D[idx])))*1.5).astype(np.int16)
         #since feet are on the same detph as the floor some processing are required before using cc
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]
@@ -745,6 +780,13 @@ class Segmentation(object):
         # compute the body part as it is done for the head
         labeled, n = spm.label(mask)
         threshold = labeled[pos2D[idx,1],pos2D[idx,0]]
+        if(binaryImage[pos2D[idx,1],pos2D[idx,0]]==0): # meet hole and noise in depth image
+            print("meet hand's hole")
+            #exit()
+            offset = 1
+            while binaryImage[pos2D[idx,1],pos2D[idx,0]+offset]==0:
+                offset += 1
+            threshold = labeled[pos2D[idx,1],pos2D[idx,0]+offset]
         labeled = (labeled==threshold)
         return labeled
     
@@ -763,35 +805,47 @@ class Segmentation(object):
         #Right Side
         if side == 0 :
             idx =19
+            disidx = 18 #ankle
+            idx1 = 15 #foot of another side
         # Left Side
         else :
             idx =15
+            disidx = 14
+            idx1 = 19
         pos2D = self.pos2D-1
 
-        #create a sphere mask of radius 12 so that anything superior does not come in the feet label
-        footDist = 12# LA.norm( (pos2D[16]-pos2D[12])/1.5).astype(np.int16)
+        #create a sphere mask1 of radius 12 so that anything superior does not come in the feet label
+        footDist = (LA.norm((pos2D[disidx]-pos2D[idx]))*1.1).astype(np.int16)
         #since feet are on the same detph as the floor some processing are required before using cc
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]
-        mask = np.ones([line,col,2])
-        mask = mask*pos2D[idx]
+        mask1 = np.ones([line,col,2])
+        mask1 = mask1*pos2D[idx]
         #create a matrix containing in each pixel its index
         lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
         colIdx = np.array([np.arange(col) for _ in range(line)])
         ind = np.stack( (colIdx,lineIdx), axis = 2)
         #compute the distance between the skeleton point of feet and each pixel
-        mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
-        mask = (mask < footDist)
-        mask = mask * binaryImage
-        
+        mask1 = np.sqrt(np.sum( (ind-mask1)*(ind-mask1),axis = 2))
+        mask1 = (mask1 < footDist) # distance < radius
+        # compute the center between two foot
+        centerpos = (pos2D[idx,0]+pos2D[idx1,0])/2
+        mask2 = np.ones([line,col])*centerpos
+        if(pos2D[idx,0]-centerpos>=0):
+            mask2 = (ind[:,:,0]-mask2)>=0
+        else:
+            mask2 = (ind[:,:,0]-mask2)<=0
+        mask = mask1 * binaryImage *mask2
         # compute the body part as it is done for the head
         labeled, n = spm.label(mask)
         threshold = labeled[pos2D[idx,1],pos2D[idx,0]]
-        if(threshold==0): # meet hole and noise in depth image
+        if(binaryImage[pos2D[idx,1],pos2D[idx,0]]==0): # meet hole and noise in depth image
+            print("meet foot's hole")
+            #exit()
             offset = 1
-            while labeled[pos2D[idx,1],pos2D[idx,0]+offset]==0:
+            while binaryImage[pos2D[idx,1]+offset,pos2D[idx,0]]==0:
                 offset += 1
-            threshold = labeled[pos2D[idx,1],pos2D[idx,0]+offset]
+            threshold = labeled[pos2D[idx,1]+offset,pos2D[idx,0]]
         labeled = (labeled==threshold)
         return labeled
     

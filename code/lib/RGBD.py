@@ -328,7 +328,7 @@ class RGBD():
         see cv2 documentation
         """
         self.depth_image = (self.depth_image[:,:] > 0.0) * cv2.bilateralFilter(self.depth_image, d, sigma_color, sigma_space)
-        
+
 
 ##################################################################
 ################### Segmentation Function #######################
@@ -388,12 +388,25 @@ class RGBD():
         #only keep vales different from 0
         bdy = bdyVals[np.nonzero(bdyVals != 0)]
         mini =  np.min(bdy)
+        if(sum(bdy==mini)<=1):
+            bdy = bdy[bdy!=mini]
+            mini =  np.min(bdy)
         #print "mini: %u" % (mini)
         maxi = np.max(bdy)
+        if(sum(bdy==maxi)<=1):
+            bdy = bdy[bdy!=maxi]
+            maxi = np.max(bdy)
         #print "max: %u" % (maxi)
+        meani = np.mean(bdy)
+        vari = np.var(bdy)
+        #print "mean: %f" % (meani)
+        #print "var: %f" % (vari)
+        #print(bdyVals)
         # double threshold according to the value of the depth
         bwmin = (self.CroppedBox > mini-0.01*max_value) 
         bwmax = (self.CroppedBox < maxi+0.01*max_value)
+        #bwmin = (self.CroppedBox >= meani-4*vari) 
+        #bwmax = (self.CroppedBox <= meani+4*vari)
         bw0 = bwmin*bwmax
         # Compare with the noised binary image given by the kinect
         # to use this put res instead of bw0 as the return argument
