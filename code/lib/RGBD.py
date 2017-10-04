@@ -388,14 +388,8 @@ class RGBD():
         #only keep vales different from 0
         bdy = bdyVals[np.nonzero(bdyVals != 0)]
         mini =  np.min(bdy)
-        if(sum(bdy==mini)<=1):
-            bdy = bdy[bdy!=mini]
-            mini =  np.min(bdy)
         #print "mini: %u" % (mini)
         maxi = np.max(bdy)
-        if(sum(bdy==maxi)<=1):
-            bdy = bdy[bdy!=maxi]
-            maxi = np.max(bdy)
         #print "max: %u" % (maxi)
         meani = np.mean(bdy)
         vari = np.var(bdy)
@@ -425,7 +419,7 @@ class RGBD():
         self.segm = segm.Segmentation(self.CroppedBox,self.CroppedPos) 
         # binary image without bqckground
         imageWBG = (self.BdyThresh()>0)
-
+        
         # Cropped image
         B = self.CroppedBox
 
@@ -436,10 +430,9 @@ class RGBD():
         armRight = self.segm.armSeg(imageWBG,B,right)
         legRight = self.segm.legSeg(imageWBG,right)
         legLeft = self.segm.legSeg(imageWBG,left)
-        head = self.segm.headSeg(imageWBG)
 
         # Retrieve every already segmentated part to the main body.
-        tmp = armLeft[0]+armLeft[1]+armRight[0]+armRight[1]+legRight[0]+legRight[1]+legLeft[0]+legLeft[1]+head
+        tmp = armLeft[0]+armLeft[1]+armRight[0]+armRight[1]+legRight[0]+legRight[1]+legLeft[0]+legLeft[1]
         MidBdyImage =(imageWBG-(tmp>0))
 
         # display result
@@ -447,6 +440,7 @@ class RGBD():
         # cv2.waitKey(0)
 
         # continue segmentation for hands and feet
+        head = self.segm.headSeg(MidBdyImage)
         handRight = ( self.segm.GetHand( MidBdyImage,right))
         handLeft = ( self.segm.GetHand( MidBdyImage,left))
         footRight = ( self.segm.GetFoot( MidBdyImage,right))
@@ -457,7 +451,7 @@ class RGBD():
         # cv2.waitKey(0)
 
         # Retrieve again every newly computed segmentated part to the main body.
-        tmp2 = handRight+handLeft+footRight+footLeft
+        tmp2 = handRight+handLeft+footRight+footLeft+head
         MidBdyImage2 =(MidBdyImage-(tmp2))
 
         # Display result
