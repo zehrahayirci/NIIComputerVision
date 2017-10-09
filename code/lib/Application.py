@@ -320,13 +320,14 @@ class Application(tk.Frame):
     
         print self.intrinsic
 
-        fact = 1000.0
+        fact = 650
 
         TimeStart = time.time()
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset_0922'
-        mat = scipy.io.loadmat(path2 + '/071_0915_01.mat')
+        matfilename = '061_0915_02'
+        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
         #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
@@ -340,9 +341,9 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 25
-        nunImg = 100
-        sImg = 6
+        self.Index = 6
+        nunImg = 200
+        sImg = 1
 
         # Former Depth Image (i.e: i)
         self.RGBD = []
@@ -364,7 +365,28 @@ class Application(tk.Frame):
             # Compute vertex map and normal map
             self.RGBD[bp].Vmap_optimize()   
             self.RGBD[bp].NMap_optimize()
-       
+
+        # show segmentation result
+        img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        img_label_temp = self.DrawColors2D(self.RGBD[0],img_label_temp)
+        img_label = img_label_temp.copy()
+        img_label[:,:,0] = img_label_temp[:,:,2].copy()
+        img_label[:,:,1] = img_label_temp[:,:,1].copy()
+        img_label[:,:,2] = img_label_temp[:,:,0].copy()
+        cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
+        cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
+        print(str(self.Index) + " frame")
+        cv2.imshow("label", img_label)
+        cv2.waitKey()
+        if(self.Index<10):
+                imgstr = '00'+str(self.Index)
+        elif(self.Index<100):
+            imgstr = '0'+str(self.Index)
+        else:
+            imgstr = str(self.Index)
+        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/segment/' + matfilename + '/seg_'+ imgstr +'.png', img_label)
+
+        """
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
 
@@ -416,22 +438,12 @@ class Application(tk.Frame):
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
 
-        # show segmentation result
-        img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
-        img_label_temp = self.DrawColors2D(self.RGBD[0],img_label_temp)
-        img_label = img_label_temp.copy()
-        img_label[:,:,0] = img_label_temp[:,:,2]
-        img_label[:,:,1] = img_label_temp[:,:,1]
-        img_label[:,:,2] = img_label_temp[:,:,0]
-        print("0 frame")
-        cv2.imshow("0 label", img_label)
-        cv2.waitKey(1)
-
         #"""
         # initialize tracker for camera pose
         Tracker = TrackManager.Tracker(0.001, 0.5, 1, [10])
         formerIdx = self.Index
         Tbbw = []
+        nbBdyPart = self.RGBD[0].bdyPart.shape[0]+1 # for testing
         for bp in range(nbBdyPart + 1):
             Tbbw.append(Id4)
         for imgk in range(self.Index+1,nunImg, sImg):
@@ -462,6 +474,28 @@ class Application(tk.Frame):
                 # Vertex and Normal map
                 newRGBD[bp].Vmap_optimize()   
                 newRGBD[bp].NMap_optimize()        
+            
+            # show segmentation result
+            img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            img_label_temp = self.DrawColors2D(newRGBD[0],img_label_temp)
+            img_label = img_label_temp.copy()
+            img_label[:,:,0] = img_label_temp[:,:,2]
+            img_label[:,:,1] = img_label_temp[:,:,1]
+            img_label[:,:,2] = img_label_temp[:,:,0]
+            print(str(imgk)+" frame")
+            #cv2.imshow("depthimage", (newRGBD[0].CroppedBox.astype(np.double))/7)
+            #cv2.imshow("depthImage_threshold", (newRGBD[0].BdyThresh()>0)*1.0)
+            #cv2.imshow("label", img_label)
+            #cv2.waitKey(1)
+            if(imgk<10):
+                imgstr = '00'+str(imgk)
+            elif(imgk<100):
+                imgstr = '0'+str(imgk)
+            else:
+                imgstr = str(imgk)
+            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/segment/' + matfilename + '/seg_' + imgstr + '.png', img_label)
+
+            """
             # create the transform matrix from local to global coordinate
             newRGBD[0].myPCA()
 
@@ -522,23 +556,11 @@ class Application(tk.Frame):
             # save with the number of the body part
             imgkStr = str(imgk)
             Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
-
-            # show segmentation result
-            img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
-            img_label_temp = self.DrawColors2D(newRGBD[0],img_label_temp)
-            img_label = img_label_temp.copy()
-            img_label[:,:,0] = img_label_temp[:,:,2]
-            img_label[:,:,1] = img_label_temp[:,:,1]
-            img_label[:,:,2] = img_label_temp[:,:,0]
-            print(imgkStr+" frame")
-            cv2.imshow(imgkStr+" label", img_label)
-            cv2.waitKey(1)
-
         
         TimeStart_Lapsed = time.time() - TimeStart
         print "total time: %f" %(TimeStart_Lapsed)
         #"""
-
+        exit()
         # projection in 2d space to draw it
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
 
