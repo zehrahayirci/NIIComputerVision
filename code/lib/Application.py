@@ -212,6 +212,8 @@ class Application(tk.Frame):
         """
         newImg = img.copy()
         Txy = RGBD.transCrop
+        Txy[3] = min(Txy[3], img.shape[0])
+        Txy[2] = min(Txy[2], img.shape[1])
         label = RGBD.labels
         for k in range(1,RGBD.bdyPart.shape[0]+1):
             color = RGBD.bdyColor[k-1]
