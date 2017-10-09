@@ -212,6 +212,8 @@ class Application(tk.Frame):
         """
         newImg = img.copy()
         Txy = RGBD.transCrop
+        Txy[3] = min(Txy[3], img.shape[0])
+        Txy[2] = min(Txy[2], img.shape[1])
         label = RGBD.labels
         for k in range(1,RGBD.bdyPart.shape[0]+1):
             color = RGBD.bdyColor[k-1]
@@ -326,9 +328,9 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset_0922'
-        matfilename = '061_0915_02'
-        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        #mat = scipy.io.loadmat(path + '/String4b.mat')
+        matfilename = 'String4b'
+        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
         bdyIdx = mat['BodyIndex']
@@ -341,8 +343,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 6
-        nunImg = 200
+        self.Index = 205
+        nunImg = 500
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -373,11 +375,11 @@ class Application(tk.Frame):
         img_label[:,:,0] = img_label_temp[:,:,2].copy()
         img_label[:,:,1] = img_label_temp[:,:,1].copy()
         img_label[:,:,2] = img_label_temp[:,:,0].copy()
-        cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
-        cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
+        #cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
+        #cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
         print(str(self.Index) + " frame")
-        cv2.imshow("label", img_label)
-        cv2.waitKey()
+        #cv2.imshow("label", img_label)
+        #cv2.waitKey()
         if(self.Index<10):
                 imgstr = '00'+str(self.Index)
         elif(self.Index<100):
