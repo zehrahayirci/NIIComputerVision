@@ -522,8 +522,10 @@ class RGBD():
         :param i: number of the body part
         :return: none
         """
-        mean3D = np.mean(self.PtCloud[i],axis = 0)
-        return mean3D
+        ctr_x = (max(self.PtCloud[i][:, 0])+min(self.PtCloud[i][:, 0]))/2
+        ctr_y = (max(self.PtCloud[i][:, 1])+min(self.PtCloud[i][:, 1]))/2
+        ctr_z = (max(self.PtCloud[i][:, 2])+min(self.PtCloud[i][:, 2]))/2
+        return [ctr_x, ctr_y, ctr_z]
 
         
     def SetTransfoMat3D(self,evecs,i):
@@ -649,7 +651,7 @@ class RGBD():
             self.FindCoord3D(i)
             #Create local to global transform
             self.SetTransfoMat3D(self.pca[i].components_,i)  
-
+            
             
     def FindCoord3D(self,i):       
         '''
