@@ -152,7 +152,7 @@ class Stitch():
 
 
 
-    def GetBBTransfo(self, pos2d,cur,prev,RGBD,bp):
+    def GetBBTransfo(self, pos2d,cur,prev,RGBD,bp, pose):
         """
         Transform Pose matrix to move the model body parts according to the position of the skeleton
         For now just a rotation in the z axis
@@ -161,6 +161,7 @@ class Stitch():
         :param cur : index for the current frame
         :param prev : index for the previous frame
         :param RGBD : an RGBD object containing the image
+        :param pose : the camera transformation from prev to cur
         :return The transform between two skeleton
         """
         PosCur = pos2d[0,cur]
@@ -171,12 +172,14 @@ class Stitch():
         # get the junctions of the current body parts
         pos = self.GetPos(bp)
 
+        Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+
         # Compute the transform between the two skeleton : Tbb = A^-1 * B
 
         # Compute A
-        A = self.GetCoordSyst(PosPrev,pos,RGBD,bp)
+        A = self.GetCoordSyst(PosPrev,pos,RGBD,bp, pose)
         # Compute B
-        B = self.GetCoordSyst(PosCur, pos, RGBD, bp)
+        B = self.GetCoordSyst(PosCur, pos, RGBD, bp, Id4)
         # Compute Tbb : skeleton tracking transfo
         Tbb = np.dot(B,General.InvPose(A))#B#np.identity(4)#A#
 
@@ -187,17 +190,18 @@ class Stitch():
 
         return Tbb#B#
 
-    def GetCoordSyst(self, pos2d,jt,RGBD,bp):
+    def GetCoordSyst(self, pos2d,jt,RGBD,bp, pose):
         '''
         This function compute the coordinates system of a body part according to the camera pose
         :param pos2d: position in 2D of the junctions
         :param jt: junctions of the body parts
         :param RGBD: Image
         :param bp: number of body part
+        :param pose : the camera transformation from prev to cur
         :return: Matrix containing the coordinates systems
         '''
         # compute the 3D centers point of the bounding boxes using the skeleton
-        ctr = np.array([0.0, 0.0, 0.0], np.float)
+        ctr = np.array([0.0, 0.0, 0.0, 1.0], np.float)
         Tg = RGBD.TransfoBB[bp]
         z = Tg[2,3]
         pos2d = pos2d-1
@@ -215,17 +219,26 @@ class Stitch():
         ctr[0] = z * (Xm - RGBD.intrinsic[0, 2]) / RGBD.intrinsic[0, 0]
         ctr[1] = z * (Ym - RGBD.intrinsic[1, 2]) / RGBD.intrinsic[1, 1]
         ctr[2] = z
+        ctr = np.dot(ctr, pose.T)
+        ctr = ctr[0:3]
 
         # Compute first junction points  of current frame
-        pt1 = np.array([0.0, 0.0, 0.0], np.float)
+        pt1 = np.array([0.0, 0.0, 0.0, 1.0], np.float)
         pt1[0] = z * (pos2d[jt[1], 0] - RGBD.intrinsic[0, 2]) / RGBD.intrinsic[0, 0]
         pt1[1] = z * (pos2d[jt[1], 1] - RGBD.intrinsic[1, 2]) / RGBD.intrinsic[1, 1]
         pt1[2] = z#RGBD.Vtx[pos2d[jt[0], 0],pos2d[jt[0], 1]][2]#
         # Compute second junction points  of current frame
-        pt2 = np.array([0.0, 0.0, 0.0], np.float)
+        pt2 = np.array([0.0, 0.0, 0.0, 1.0], np.float)
         pt2[0] = z * (pos2d[jt[0], 0] - RGBD.intrinsic[0, 2]) / RGBD.intrinsic[0, 0]
         pt2[1] = z * (pos2d[jt[0], 1] - RGBD.intrinsic[1, 2]) / RGBD.intrinsic[1, 1]
         pt2[2] = z#RGBD.Vtx[pos2d[jt[1], 0],pos2d[jt[1], 1]][2]#
+
+        # do camera transformation
+        pt1 = np.dot(pt1, pose.T)
+        pt1 = pt1[0:3]
+        pt2 = np.dot(pt2, pose.T)
+        pt2 = pt2[0:3]
+
         # Compute normalized axis of coordinates system
         axeX = (pt2 - pt1)/LA.norm(pt2 - pt1)
         #signX = np.sign(axeX)
