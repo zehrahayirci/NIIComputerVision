@@ -252,10 +252,12 @@ class Stitch():
         if bp < 9 or bp == 12:
             ctr[0] = (vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][0] + vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][0]) / 2
             ctr[1] = (vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][1] + vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][1]) / 2
+            #ctr[2] = z
             ctr[2] = (vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][2] + vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][2]) / 2
         else:
             ctr[0] = vRGBD.Vtx[pos2d[jt[2], 1],pos2d[jt[2], 0]][0]
             ctr[1] = vRGBD.Vtx[pos2d[jt[2], 1],pos2d[jt[2], 0]][1]
+            #ctr[2] = z
             ctr[2] = vRGBD.Vtx[pos2d[jt[2], 1],pos2d[jt[2], 0]][2]
 
         # compute the center of the coordinates system
@@ -265,13 +267,19 @@ class Stitch():
         # Compute first junction points  of current frame
         pt1 = np.array([0.0, 0.0, 0.0, 1.0], np.float)
         pt1[0] = vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][0]
+        #pt1[0] = pos2d[jt[0], 0]
         pt1[1] = vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][1]
+        #pt1[1] = pos2d[jt[0], 1]
         pt1[2] = vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][2]
+        #pt1[2] = z
         # Compute second junction points  of current frame
         pt2 = np.array([0.0, 0.0, 0.0, 1.0], np.float)
         pt2[0] = vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][0] 
+        #pt2[0] = pos2d[jt[1], 0]
         pt2[1] = vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][1] 
+        #pt2[1] = pos2d[jt[1], 1]
         pt2[2] = vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][2]
+        #pt2[2] = z
 
         # do camera transformation
         pt1 = np.dot(pt1, pose.T)
