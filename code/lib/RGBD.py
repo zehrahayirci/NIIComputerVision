@@ -89,6 +89,12 @@ class RGBD():
         self.depth_image = depth_in.astype(np.float32) / self.fact
         # self.skel = self.depth_image.copy() # useless
 
+        # handle positions which are out of boundary
+        self.pos2d[0,idx][:,0] = (np.maximum(0, self.pos2d[0, idx][:,0]))
+        self.pos2d[0,idx][:,1] = (np.maximum(0, self.pos2d[0, idx][:,1]))
+        self.pos2d[0,idx][:,0] = (np.minimum(self.Size[1], self.pos2d[0, idx][:,0]))
+        self.pos2d[0,idx][:,1] = (np.minimum(self.Size[0], self.pos2d[0, idx][:,1]))
+
     #####################################################################
     ################### Map Conversion Functions #######################
     #####################################################################
@@ -379,7 +385,7 @@ class RGBD():
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
         self.Croppedbw = bwBox[lineStart:lineEnd,colStart:colEnd]
-        
+
     def BdyThresh(self):
         """
         Threshold the depth image in order to to get the whole body alone with the bounding box (BB)
