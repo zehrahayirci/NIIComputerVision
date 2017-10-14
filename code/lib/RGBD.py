@@ -89,6 +89,12 @@ class RGBD():
         self.depth_image = depth_in.astype(np.float32) / self.fact
         # self.skel = self.depth_image.copy() # useless
 
+        # handle positions which are out of boundary
+        self.pos2d[0,idx][:,0] = (np.maximum(0, self.pos2d[0, idx][:,0]))
+        self.pos2d[0,idx][:,1] = (np.maximum(0, self.pos2d[0, idx][:,1]))
+        self.pos2d[0,idx][:,0] = (np.minimum(self.Size[1], self.pos2d[0, idx][:,0]))
+        self.pos2d[0,idx][:,1] = (np.minimum(self.Size[0], self.pos2d[0, idx][:,1]))
+
     #####################################################################
     ################### Map Conversion Functions #######################
     #####################################################################
@@ -379,7 +385,7 @@ class RGBD():
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
         self.Croppedbw = bwBox[lineStart:lineEnd,colStart:colEnd]
-        
+
     def BdyThresh(self):
         """
         Threshold the depth image in order to to get the whole body alone with the bounding box (BB)
@@ -396,9 +402,16 @@ class RGBD():
         #print "mini: %u" % (mini)
         maxi = np.max(bdy)
         #print "max: %u" % (maxi)
+        meani = np.mean(bdy)
+        vari = np.var(bdy)
+        #print "mean: %f" % (meani)
+        #print "var: %f" % (vari)
+        #print(bdyVals)
         # double threshold according to the value of the depth
         bwmin = (self.CroppedBox > mini-0.01*max_value) 
         bwmax = (self.CroppedBox < maxi+0.01*max_value)
+        #bwmin = (self.CroppedBox >= meani-4*vari) 
+        #bwmax = (self.CroppedBox <= meani+4*vari)
         bw0 = bwmin*bwmax
         # Compare with the noised binary image given by the kinect
         # to use this put res instead of bw0 as the return argument
@@ -527,10 +540,8 @@ class RGBD():
         :param i: number of the body part
         :return: none
         """
-        ctr_x = (max(self.PtCloud[i][:, 0])+min(self.PtCloud[i][:, 0]))/2
-        ctr_y = (max(self.PtCloud[i][:, 1])+min(self.PtCloud[i][:, 1]))/2
-        ctr_z = (max(self.PtCloud[i][:, 2])+min(self.PtCloud[i][:, 2]))/2
-        return [ctr_x, ctr_y, ctr_z]
+        mean3D = np.mean(self.PtCloud[i],axis = 0)
+        return mean3D
 
         
     def SetTransfoMat3D(self,evecs,i):

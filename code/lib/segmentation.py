@@ -145,8 +145,8 @@ class Segmentation(object):
                             y_down = y
                             break
                 else:
-                    y_up = y-1
-                    x_up = int(np.round(-(b*y+c)/a))
+                    y_down = y-1
+                    x_down = int(np.round(-(b*y+c)/a))
                     break
             if x_up>x_down:
                 right = [x_up, y_up]
