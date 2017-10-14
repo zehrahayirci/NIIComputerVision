@@ -369,7 +369,12 @@ class RGBD():
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
         colEnd = (maxH+distH2N).astype(np.int16)
-        lineEnd = (maxV+distH2N).astype(np.int16)  
+        lineEnd = (maxV+distH2N).astype(np.int16) 
+        colStart = max(0, colStart)
+        lineStart = max(0, lineStart)
+        colEnd = min(colEnd, self.Size[1])
+        lineEnd = min(lineEnd, self.Size[0])
+
         self.transCrop = np.array([colStart,lineStart,colEnd,lineEnd])
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)

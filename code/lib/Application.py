@@ -327,10 +327,10 @@ class Application(tk.Frame):
         TimeStart = time.time()
 
         #load data
-        path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset_0922'
-        matfilename = 'String4b'
-        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        mat = scipy.io.loadmat(path + '/String4b.mat')
+        path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
+        matfilename = '062_0928_01'
+        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
         bdyIdx = mat['BodyIndex']
@@ -343,7 +343,7 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 205
+        self.Index = 66
         nunImg = 500
         sImg = 1
 
@@ -375,6 +375,7 @@ class Application(tk.Frame):
         img_label[:,:,0] = img_label_temp[:,:,2].copy()
         img_label[:,:,1] = img_label_temp[:,:,1].copy()
         img_label[:,:,2] = img_label_temp[:,:,0].copy()
+        img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16), 1:3] = 110
         #cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
         #cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
         print(str(self.Index) + " frame")
@@ -484,6 +485,7 @@ class Application(tk.Frame):
             img_label[:,:,0] = img_label_temp[:,:,2]
             img_label[:,:,1] = img_label_temp[:,:,1]
             img_label[:,:,2] = img_label_temp[:,:,0]
+            img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16), 1:3] = 110
             print(str(imgk)+" frame")
             #cv2.imshow("depthimage", (newRGBD[0].CroppedBox.astype(np.double))/7)
             #cv2.imshow("depthImage_threshold", (newRGBD[0].BdyThresh()>0)*1.0)
