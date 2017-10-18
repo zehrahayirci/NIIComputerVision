@@ -505,6 +505,7 @@ class Tracker():
         # transform in the current frame and thus enabling ICP.
         Size = MeshVtx.shape
         res = Pose.copy()
+        corres = []        
 
 
         for l in range(1,self.lvl+1):
@@ -547,16 +548,6 @@ class Tracker():
                 cdt_line = (line_index > -1) * (line_index < NewImage.Size[0])
                 line_index = line_index*cdt_line
                 column_index = column_index*cdt_column
-
-                # calculate weight
-                weight = np.ones(Size[0])
-                if(len(pos)!=0):
-                    pos = pos-1
-                for pp in range(len(pos)):
-                    f = np.nonzero( np.sum([np.square(column_index-pos[pp][1]),np.square(line_index-pos[pp][0])], axis=0) <5)
-                    weight[f] = 5
-                    #if(sum(sum(f))!=0):
-                        #print "num: ", sum(sum(f))
             
                 # compute vtx and nmls differences
                 diff_Vtx =  NewImage.Vtx[line_index[:], column_index[:]] - pt[:,0:3] 
@@ -587,8 +578,21 @@ class Tracker():
 
                 #checking mask
                 mask = cdt_line*cdt_column * mask_pt * (norm_Norme_Nmle > 0.0) * mask_vtx * mask_nmls
+
+                # calculate weight
+                weight = np.ones(Size[0])
+                if(len(pos)!=0):
+                    pos = pos-1
+                for pp in range(len(pos)):
+                    f = np.nonzero( np.sum([np.square(column_index-pos[pp][0]),np.square(line_index-pos[pp][1])], axis=0) <5)
+                    weight[f] = 10
+                    #if(sum(sum(f))!=0):
+                        #print "num: ", sum(sum(f))
+                    #mask[f] = 1
+
                 #print "final correspondence"
                 #print sum(mask)
+                corres.append(sum(mask))
 
                 # partial derivate
                 w = 1.0
@@ -631,6 +635,10 @@ class Tracker():
                 # print "res"
                 # print res
 
+        if(corres[0]>corres[-1]+corres[0]/20):
+            print "correspondence reduce"
+            print corres
+            return Pose
         
         return res        
 

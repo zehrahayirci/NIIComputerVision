@@ -402,16 +402,9 @@ class RGBD():
         #print "mini: %u" % (mini)
         maxi = np.max(bdy)
         #print "max: %u" % (maxi)
-        meani = np.mean(bdy)
-        vari = np.var(bdy)
-        #print "mean: %f" % (meani)
-        #print "var: %f" % (vari)
-        #print(bdyVals)
         # double threshold according to the value of the depth
         bwmin = (self.CroppedBox > mini-0.01*max_value) 
         bwmax = (self.CroppedBox < maxi+0.01*max_value)
-        #bwmin = (self.CroppedBox >= meani-4*vari) 
-        #bwmax = (self.CroppedBox <= meani+4*vari)
         bw0 = bwmin*bwmax
         # Compare with the noised binary image given by the kinect
         # to use this put res instead of bw0 as the return argument
@@ -500,8 +493,8 @@ class RGBD():
         legLeft[1] = calfL         color = [255,255,180] = #ffffb4     very light yellow     label = 8
         head = headB               color = [255,0,0]     = #ff0000     red                   label = 9
         body = body                color = [255,255,255] = #ffffff     white                 label = 10
-        handRight = right hand     color = [0,191,255]   = #00bfff     turquoise             label = 11
-        handLeft = left hand       color = [0,100,0]     = #006400     dark green            label = 12
+        handRight = right hand     color = [0,100,0]     = #006400     dark green            label = 11
+        handLeft = left hand       color = [0,191,255]   = #00bfff     turquoise             label = 12
         footRight = right foot     color = [199,21,133]  = #c715ff     dark purple           label = 13
         footLeft = left foot       color = [255,165,0]   = #ffa500     orange                label = 14
         '''
@@ -540,8 +533,10 @@ class RGBD():
         :param i: number of the body part
         :return: none
         """
-        mean3D = np.mean(self.PtCloud[i],axis = 0)
-        return mean3D
+        ctr_x = (max(self.PtCloud[i][:, 0])+min(self.PtCloud[i][:, 0]))/2
+        ctr_y = (max(self.PtCloud[i][:, 1])+min(self.PtCloud[i][:, 1]))/2
+        ctr_z = (max(self.PtCloud[i][:, 2])+min(self.PtCloud[i][:, 2]))/2
+        return [ctr_x, ctr_y, ctr_z]
 
         
     def SetTransfoMat3D(self,evecs,i):
@@ -603,8 +598,8 @@ class RGBD():
         z = self.Vtx[:,:,2]*mask
 
         #keep only value that are different from 0 in the list
-        x_res = x[~(x==0)]
-        y_res = y[~(y==0)]
+        x_res = x[~(z==0)]
+        y_res = y[~(z==0)]
         z_res = z[~(z==0)]
 
         #concatenate each axis

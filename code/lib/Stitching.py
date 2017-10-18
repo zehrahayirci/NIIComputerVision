@@ -182,6 +182,12 @@ class Stitch():
         A = self.GetCoordSyst(PosPrev,pos,RGBD, pRGBD, bp, pose)
         # Compute B
         B = self.GetCoordSyst(PosCur, pos, RGBD, nRGBD, bp, Id4)
+        # check if junction is on the noise
+        if B[3,3]==0:
+            print bp, " meet noise"
+
+            return pose
+
         # Compute Tbb : skeleton tracking transfo
         Tbb = np.dot(B,General.InvPose(A))#B#np.identity(4)#A#
 
@@ -223,12 +229,9 @@ class Stitch():
         R += np.sin(theta)*Ax + (1-np.cos(theta))*np.dot(Ax,Ax)
         
         if(theta*180<5):
-            R = np.identity(3)
-        elif(180-theta*180<5):
-            x = np.array([0,0,1])
-            Ax = np.array([[0., -x[2], -x[1]], [x[2], 0., -x[0]], [-x[1], x[0], 0.]])
-            R = np.identity(3)
-            R += np.sin(theta)*Ax + (1-np.cos(theta))*np.dot(Ax,Ax) 
+            print "angle too small"
+        if(180-theta*180<5):
+            print "angle closes 180"
         
         return R
 
@@ -247,40 +250,53 @@ class Stitch():
         # compute the 3D centers point of the bounding boxes using the skeleton
         ctr = np.array([0.0, 0.0, 0.0, 1.0], np.float)
         Tg = RGBD.TransfoBB[bp]
+        Tg = np.dot(pose, Tg)
         z = Tg[2,3]
         pos2d = pos2d.astype(np.int16)-1
         if bp < 9 or bp == 12:
-            ctr[0] = (vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][0] + vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][0]) / 2
-            ctr[1] = (vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][1] + vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][1]) / 2
+            ctr[0] = (pos2d[jt[0], 0] + pos2d[jt[1], 0]) / 2
+            ctr[1] = (pos2d[jt[0], 1] + pos2d[jt[1], 1]) / 2
             #ctr[2] = z
-            ctr[2] = (vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][2] + vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][2]) / 2
+            ctr[2] = (vRGBD.depth_image[pos2d[jt[0], 1],pos2d[jt[0], 0]] + vRGBD.depth_image[pos2d[jt[1], 1],pos2d[jt[1], 0]]) / 2
+            if(vRGBD.depth_image[pos2d[jt[0], 1],pos2d[jt[0], 0]]==0 or vRGBD.depth_image[pos2d[jt[1], 1],pos2d[jt[1], 0]]==0):
+                print bp, " meet noise at center"
+                ctr[2] = z
         else:
-            ctr[0] = vRGBD.Vtx[pos2d[jt[2], 1],pos2d[jt[2], 0]][0]
-            ctr[1] = vRGBD.Vtx[pos2d[jt[2], 1],pos2d[jt[2], 0]][1]
+            ctr[0] = pos2d[jt[2], 0]
+            ctr[1] = pos2d[jt[2], 1]
             #ctr[2] = z
-            ctr[2] = vRGBD.Vtx[pos2d[jt[2], 1],pos2d[jt[2], 0]][2]
+            ctr[2] = vRGBD.depth_image[pos2d[jt[2], 1],pos2d[jt[2], 0]]
+            if(ctr[2]==0):
+                print bp, " meet noise at center"
+                ctr[2] = z
 
         # compute the center of the coordinates system
+        ctr[0] = ctr[2] * (ctr[0]-vRGBD.intrinsic[0,2])/vRGBD.intrinsic[0, 0]
+        ctr[1] = ctr[2] * (ctr[1]-vRGBD.intrinsic[1,2])/vRGBD.intrinsic[1, 1]
         ctr = np.dot(ctr, pose.T)
         ctr = ctr[0:3]
 
         # Compute first junction points  of current frame
         pt1 = np.array([0.0, 0.0, 0.0, 1.0], np.float)
-        pt1[0] = vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][0]
-        #pt1[0] = pos2d[jt[0], 0]
-        pt1[1] = vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][1]
-        #pt1[1] = pos2d[jt[0], 1]
-        pt1[2] = vRGBD.Vtx[pos2d[jt[0], 1],pos2d[jt[0], 0]][2]
-        #pt1[2] = z
+        pt1[0] = (pos2d[jt[1], 0]-vRGBD.intrinsic[0,2])/vRGBD.intrinsic[0, 0]
+        pt1[1] = (pos2d[jt[1], 1]-vRGBD.intrinsic[1,2])/vRGBD.intrinsic[1, 1]
+        pt1[2] = vRGBD.depth_image[pos2d[jt[1], 1],pos2d[jt[1], 0]]
+        if(pt1[2]==0):
+            print bp, " meet noise at pt1"
+            pt1[2] = z
+        pt1[0] *= pt1[2]
+        pt1[1] *= pt1[2]
         # Compute second junction points  of current frame
         pt2 = np.array([0.0, 0.0, 0.0, 1.0], np.float)
-        pt2[0] = vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][0] 
-        #pt2[0] = pos2d[jt[1], 0]
-        pt2[1] = vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][1] 
-        #pt2[1] = pos2d[jt[1], 1]
-        pt2[2] = vRGBD.Vtx[pos2d[jt[1], 1],pos2d[jt[1], 0]][2]
-        #pt2[2] = z
-
+        pt2[0] = (pos2d[jt[0], 0]-vRGBD.intrinsic[0,2])/vRGBD.intrinsic[0, 0]
+        pt2[1] = (pos2d[jt[0], 1]-vRGBD.intrinsic[1,2])/vRGBD.intrinsic[1, 1]
+        pt2[2] = vRGBD.depth_image[pos2d[jt[0], 1],pos2d[jt[0], 0]]
+        if(pt2[2]==0):
+            print bp, " meet noise at pt2"
+            pt2[2] = z
+        pt2[0] *= pt2[2]
+        pt2[1] *= pt2[2]
+        
         # do camera transformation
         pt1 = np.dot(pt1, pose.T)
         pt1 = pt1[0:3]
@@ -304,6 +320,11 @@ class Stitch():
         e3b = np.array( [axeZ[0],axeZ[1],axeZ[2],0])
         origine = np.array( [ctr[0],ctr[1],ctr[2],1])
         coord = np.stack( (e1b,e2b,e3b,origine),axis = 0 ).T
+
+        # check if the junction has depth value
+        if pt1[2] * pt2[2]==0:
+            coord[3,3] = 0
+
         return coord
 
     def GetPos(self,bp):

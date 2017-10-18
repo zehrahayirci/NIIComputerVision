@@ -328,9 +328,9 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = '031_0915_01'
-        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        #mat = scipy.io.loadmat(path + '/String4b.mat')
+        matfilename = 'String4b'
+        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
         bdyIdx = mat['BodyIndex']
@@ -341,10 +341,10 @@ class Application(tk.Frame):
         T_Pose = []
         PoseBP = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-        
+
         # number of images in the sequence. Start and End
-        self.Index = 3
-        nunImg = 25
+        self.Index = 191
+        nunImg = 220
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -520,22 +520,24 @@ class Application(tk.Frame):
                 #T_Pose[bp] = np.dot(Tbb_s[bp], T_Pose[bp])
                 T_Pose[bp] = np.dot(Tbb_icp[bp], T_Pose[bp])
                 
-                #update transform matrix with camera pose
+                #update transform matrix with camera pose & local pose
                 Tg_new = np.dot(T_Pose[bp],Tg[bp])
-                # update trnasform matrix with skeleton tracking matrix
-                #Tg_new = np.dot(Tbbw[bp],Tg_new)
+                
                 # Put the Global transfo in PoseBP so that the dtype entered in the GPU is correct
                 for i in range(4):
                     for j in range(4):
                         PoseBP[i][j] = Tg_new[i][j]#Tg[bp][i][j]#
 
+                # projection in 2d space to draw the 3D model
+                rendering = self.RGBD[0].DrawMesh(rendering,Parts[bp].MC.Vertices,Parts[bp].MC.Normales,PoseBP, 1, self.color_tag)
+
                 # TSDF Fusion of the body part
-                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP)
+                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP)
 
                 # Create Mesh
-                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)
+                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
@@ -548,9 +550,6 @@ class Application(tk.Frame):
                     StitchBdy.StitchedFaces = Parts[bp].MC.Faces
                 else:
                     StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces,PoseBP)
-
-                # projection in 2d space to draw the 3D model
-                rendering = self.RGBD[0].DrawMesh(rendering,Parts[bp].MC.Vertices,Parts[bp].MC.Normales,PoseBP, 1, self.color_tag)
             
             formerIdx = imgk
             time_lapsed = time.time() - start
