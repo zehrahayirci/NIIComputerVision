@@ -485,7 +485,7 @@ class Application(tk.Frame):
             img_label[:,:,0] = img_label_temp[:,:,2]
             img_label[:,:,1] = img_label_temp[:,:,1]
             img_label[:,:,2] = img_label_temp[:,:,0]
-            img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16), 1:3] = 110
+            img_label[self.pos2d[0,imgk][:,1].astype(np.int16), self.pos2d[0,imgk][:,0].astype(np.int16), 1:3] = 110
             print(str(imgk)+" frame")
             #cv2.imshow("depthimage", (newRGBD[0].CroppedBox.astype(np.double))/7)
             #cv2.imshow("depthImage_threshold", (newRGBD[0].BdyThresh()>0)*1.0)
