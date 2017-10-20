@@ -491,7 +491,7 @@ class Tracker():
     
     
     
-    def RegisterRGBDMesh_optimize(self, NewImage, MeshVtx, MeshNmls,Pose):
+    def RegisterRGBDMesh_optimize(self, NewImage, MeshVtx, MeshNmls,Pose, pos=[]):
         '''
         Optimize version with CPU  of RegisterRGBDMesh
         :param NewImage: RGBD image
@@ -504,7 +504,8 @@ class Tracker():
         # Initializing the res with the current Pose so that mesh that are in a local coordinates can be
         # transform in the current frame and thus enabling ICP.
         Size = MeshVtx.shape
-        res = Pose
+        res = Pose.copy()
+        corres = []        
 
 
         for l in range(1,self.lvl+1):
@@ -547,7 +548,7 @@ class Tracker():
                 cdt_line = (line_index > -1) * (line_index < NewImage.Size[0])
                 line_index = line_index*cdt_line
                 column_index = column_index*cdt_column
-
+            
                 # compute vtx and nmls differences
                 diff_Vtx =  NewImage.Vtx[line_index[:], column_index[:]] - pt[:,0:3] 
                 diff_Vtx = diff_Vtx*diff_Vtx
@@ -577,8 +578,21 @@ class Tracker():
 
                 #checking mask
                 mask = cdt_line*cdt_column * mask_pt * (norm_Norme_Nmle > 0.0) * mask_vtx * mask_nmls
-                print "final correspondence"
-                print sum(mask)
+
+                # calculate weight
+                weight = np.ones(Size[0])
+                if(len(pos)!=0):
+                    pos = pos-1
+                for pp in range(len(pos)):
+                    f = np.nonzero( np.sum([np.square(column_index-pos[pp][0]),np.square(line_index-pos[pp][1])], axis=0) <5)
+                    weight[f] = 10
+                    #if(sum(sum(f))!=0):
+                        #print "num: ", sum(sum(f))
+                    #mask[f] = 1
+
+                #print "final correspondence"
+                #print sum(mask)
+                corres.append(sum(mask))
 
                 # partial derivate
                 w = 1.0
@@ -594,6 +608,10 @@ class Tracker():
                                                       + nmle[:,2]*(NewImage.Vtx[line_index[:], column_index[:]][:,2] - pt[:,2])) )
                 # Solving sum(A.t * A) = sum(A.t * b) ref newcombe kinect fusion
                 # fisrt part of the linear equation
+                Buffer_B = Buffer_B*weight
+                weight = weight.T
+                weight = np.stack((weight,weight,weight,weight,weight,weight), axis = 1)
+                Buffer = Buffer*weight
                 A = np.dot(Buffer.transpose(), Buffer)
                 b = np.dot(Buffer.transpose(), Buffer_B)
                 
@@ -603,6 +621,7 @@ class Tracker():
                     print "determinant null"
                     print det
                     warnings.warn("this is a warning message")
+                    return Pose
                     break
 
                 # solve equation
@@ -611,11 +630,15 @@ class Tracker():
                 delta_transfo = General.InvPose(Exponential(delta_qsi))
 
                 res = np.dot(delta_transfo, res)
-                print "delta_transfo"
-                print delta_transfo
-                print "res"
-                print res
+                # print "delta_transfo"
+                # print delta_transfo
+                # print "res"
+                # print res
 
+        if(corres[0]>corres[-1]+corres[0]/20):
+            print "correspondence reduce"
+            print corres
+            return Pose
         
         return res        
 

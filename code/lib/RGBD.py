@@ -89,6 +89,12 @@ class RGBD():
         self.depth_image = depth_in.astype(np.float32) / self.fact
         # self.skel = self.depth_image.copy() # useless
 
+        # handle positions which are out of boundary
+        self.pos2d[0,idx][:,0] = (np.maximum(0, self.pos2d[0, idx][:,0]))
+        self.pos2d[0,idx][:,1] = (np.maximum(0, self.pos2d[0, idx][:,1]))
+        self.pos2d[0,idx][:,0] = (np.minimum(self.Size[1], self.pos2d[0, idx][:,0]))
+        self.pos2d[0,idx][:,1] = (np.minimum(self.Size[0], self.pos2d[0, idx][:,1]))
+
     #####################################################################
     ################### Map Conversion Functions #######################
     #####################################################################
@@ -369,12 +375,17 @@ class RGBD():
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
         colEnd = (maxH+distH2N).astype(np.int16)
-        lineEnd = (maxV+distH2N).astype(np.int16)  
+        lineEnd = (maxV+distH2N).astype(np.int16) 
+        colStart = max(0, colStart)
+        lineStart = max(0, lineStart)
+        colEnd = min(colEnd, self.Size[1])
+        lineEnd = min(lineEnd, self.Size[0])
+
         self.transCrop = np.array([colStart,lineStart,colEnd,lineEnd])
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
         self.Croppedbw = bwBox[lineStart:lineEnd,colStart:colEnd]
-        
+
     def BdyThresh(self):
         """
         Threshold the depth image in order to to get the whole body alone with the bounding box (BB)
@@ -482,8 +493,8 @@ class RGBD():
         legLeft[1] = calfL         color = [255,255,180] = #ffffb4     very light yellow     label = 8
         head = headB               color = [255,0,0]     = #ff0000     red                   label = 9
         body = body                color = [255,255,255] = #ffffff     white                 label = 10
-        handRight = right hand     color = [0,191,255]   = #00bfff     turquoise             label = 11
-        handLeft = left hand       color = [0,100,0]     = #006400     dark green            label = 12
+        handRight = right hand     color = [0,100,0]     = #006400     dark green            label = 11
+        handLeft = left hand       color = [0,191,255]   = #00bfff     turquoise             label = 12
         footRight = right foot     color = [199,21,133]  = #c715ff     dark purple           label = 13
         footLeft = left foot       color = [255,165,0]   = #ffa500     orange                label = 14
         '''
@@ -522,8 +533,10 @@ class RGBD():
         :param i: number of the body part
         :return: none
         """
-        mean3D = np.mean(self.PtCloud[i],axis = 0)
-        return mean3D
+        ctr_x = (max(self.PtCloud[i][:, 0])+min(self.PtCloud[i][:, 0]))/2
+        ctr_y = (max(self.PtCloud[i][:, 1])+min(self.PtCloud[i][:, 1]))/2
+        ctr_z = (max(self.PtCloud[i][:, 2])+min(self.PtCloud[i][:, 2]))/2
+        return [ctr_x, ctr_y, ctr_z]
 
         
     def SetTransfoMat3D(self,evecs,i):
@@ -585,8 +598,8 @@ class RGBD():
         z = self.Vtx[:,:,2]*mask
 
         #keep only value that are different from 0 in the list
-        x_res = x[~(x==0)]
-        y_res = y[~(y==0)]
+        x_res = x[~(z==0)]
+        y_res = y[~(z==0)]
         z_res = z[~(z==0)]
 
         #concatenate each axis
