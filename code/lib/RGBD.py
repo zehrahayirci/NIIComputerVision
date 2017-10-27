@@ -610,7 +610,26 @@ class RGBD():
 
         return res
     
-    
+    def getSkeletonVtx(self, mask, depth):
+        """
+        calculate the skeleton in 3D
+        :param mask: a matrix containing one only in the body parts indexes, 0 otherwise
+        :param depth: depth value of skeleton (the cetnter of z axis on global coordinate)
+        :retrun: list of vertices of skeleton
+        """
+        # get pos2D
+        pos2D = self.pos2d[0,self.Index]-1
+        # get depth and d=0 if d output bodypart 
+        d = np.ones(pos2D.shape[0])*depth
+        d = d*mask[pos2D[:,1].astype(np.int16), pos2D[:,0].astype(np.int16)]
+        #  project to 3D
+        pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
+        pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
+        x = d * pos2D[:,0]
+        y = d * pos2D[:,1]
+        z = d
+        return np.dstack((x,y,z))
+        
            
     def myPCA(self, dims_rescaled_data=3):
         # dims_rescaled_data useless
@@ -641,6 +660,8 @@ class RGBD():
         self.coordsGbl.append([0.,0.,0.])
         self.mask=[]
         self.mask.append([0.,0.,0.])
+        self.skeVtx=[]
+        self.skeVtx.append(np.zeros((1,25,3)))
         for i in range(1,self.bdyPart.shape[0]+1):
             self.mask.append( (self.labels == i) )
             # compute center of 3D
@@ -663,6 +684,8 @@ class RGBD():
             #Create local to global transform
             self.SetTransfoMat3D(self.pca[i].components_,i)  
 
+            # create the skeleton vtx
+            self.skeVtx.append(self.getSkeletonVtx(self.mask[i], self.coordsGbl[i][4][2]-self.coordsGbl[i][0][2]))
             
     def FindCoord3D(self,i):       
         '''

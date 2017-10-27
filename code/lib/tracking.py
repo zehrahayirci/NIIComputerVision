@@ -491,13 +491,14 @@ class Tracker():
     
     
     
-    def RegisterRGBDMesh_optimize(self, NewImage, MeshVtx, MeshNmls,Pose, pos=[]):
+    def RegisterRGBDMesh_optimize(self, NewImage, NewSkeVtx, PreSkeVtx, MeshVtx, MeshNmls,Pose):
         '''
         Optimize version with CPU  of RegisterRGBDMesh
         :param NewImage: RGBD image
+        :param NewSkeVtx: skeleton vertex
+        :param PreSkeVtx: skeleton vertex
         :param MeshVtx: list of vertices of the mesh
         :param MeshNmls: list of normales of the mesh
-        :param Pose:  estimate of the pose of the current image
         :return: Transform matrix between Image1 and the mesh (transform from the first frame to the current frame)
         '''
         
@@ -579,16 +580,16 @@ class Tracker():
                 #checking mask
                 mask = cdt_line*cdt_column * mask_pt * (norm_Norme_Nmle > 0.0) * mask_vtx * mask_nmls
 
-                # calculate weight
-                weight = np.ones(Size[0])
-                if(len(pos)!=0):
-                    pos = pos-1
-                for pp in range(len(pos)):
-                    f = np.nonzero( np.sum([np.square(column_index-pos[pp][0]),np.square(line_index-pos[pp][1])], axis=0) <5)
-                    weight[f] = 10
-                    #if(sum(sum(f))!=0):
-                        #print "num: ", sum(sum(f))
-                    #mask[f] = 1
+                # calculate junction cost
+                Buffer_jun = np.zeros((25, 6), dtype = np.float32)
+                Buffer_B_jun = np.zeros((25), dtype = np.float32)
+                for jj in range(1,NewSkeVtx.shape[1]):
+                    PVtx = np.ones(4)
+                    PVtx[0:3] = PreSkeVtx[0,jj,:]
+                    PVtx = np.dot(PVtx,res)
+                    w = 100*(NewSkeVtx[0,jj,2]==0)*(PVtx[2]==0)
+                    Buffer_jun[jj] = [w,w,w, w*NewSkeVtx[0,jj,1] - w*NewSkeVtx[0,jj,2], w*NewSkeVtx[0,jj,2] - w*NewSkeVtx[0,jj,0], w*NewSkeVtx[0,jj,1] - w*NewSkeVtx[0,jj,0]]
+                    Buffer_B[jj] = (NewSkeVtx[0,jj,0]+NewSkeVtx[0,jj,1]+NewSkeVtx[0,jj,2]-PVtx[0]-PVtx[1]-PVtx[2])*w 
 
                 #print "final correspondence"
                 #print sum(mask)
@@ -608,10 +609,8 @@ class Tracker():
                                                       + nmle[:,2]*(NewImage.Vtx[line_index[:], column_index[:]][:,2] - pt[:,2])) )
                 # Solving sum(A.t * A) = sum(A.t * b) ref newcombe kinect fusion
                 # fisrt part of the linear equation
-                Buffer_B = Buffer_B*weight
-                weight = weight.T
-                weight = np.stack((weight,weight,weight,weight,weight,weight), axis = 1)
-                Buffer = Buffer*weight
+                Buffer_B = np.concatenate((Buffer_B, Buffer_B_jun))
+                Buffer = np.concatenate((Buffer, Buffer_jun))
                 A = np.dot(Buffer.transpose(), Buffer)
                 b = np.dot(Buffer.transpose(), Buffer_B)
                 
