@@ -333,7 +333,6 @@ class Application(tk.Frame):
         #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
-        bdyIdx = mat['BodyIndex']
 
         self.connectionMat = scipy.io.loadmat(path + '/SkeletonConnectionMap.mat')
         self.connection = self.connectionMat['SkeletonConnectionMap']
@@ -341,7 +340,7 @@ class Application(tk.Frame):
         T_Pose = []
         PoseBP = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-
+        
         # number of images in the sequence. Start and End
         self.Index = 3
         nunImg = 14
@@ -354,7 +353,7 @@ class Application(tk.Frame):
             # add an RGBD Object in the list
             self.RGBD.append(RGBD.RGBD(path + '/Depth.tiff', path + '/RGB.tiff', self.intrinsic, fact))
             # load data in the RGBD Object
-            self.RGBD[bp].LoadMat(lImages,self.pos2d,self.connection,bdyIdx )
+            self.RGBD[bp].LoadMat(lImages,self.pos2d,self.connection)
             self.RGBD[bp].ReadFromMat(self.Index)
             # process depth image
             self.RGBD[bp].BilateralFilter(-1, 0.02, 3)
@@ -457,7 +456,7 @@ class Application(tk.Frame):
 
         for bp in range(nbBdyPart+1):
             T_Pose.append(Id4)
-
+            
         for imgk in range(self.Index+1,nunImg, sImg):
             #Time counting
             start = time.time()
@@ -478,7 +477,7 @@ class Application(tk.Frame):
             # separate  each body parts of the image into different object -> each object have just the body parts in its depth image
             for bp in range(nbBdyPart):
                 newRGBD.append(RGBD.RGBD(path + '/Depth.tiff', path + '/RGB.tiff', self.intrinsic, fact))
-                newRGBD[bp].LoadMat(lImages,self.pos2d,self.connection,bdyIdx )              
+                newRGBD[bp].LoadMat(lImages,self.pos2d,self.connection)              
                 # Get new current image
                 newRGBD[bp].ReadFromMat(imgk) 
                 newRGBD[bp].BilateralFilter(-1, 0.02, 3)
