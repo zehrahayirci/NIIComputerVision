@@ -327,13 +327,12 @@ class Application(tk.Frame):
         TimeStart = time.time()
 
         #load data
-        path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = '222_0928_01'
+        path2 = 'C:/Users/nii-user/Desktop/sylvia/DL_dataset'
+        matfilename = '011_1027_01'
         mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
         #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
-        bdyIdx = mat['BodyIndex']
 
         self.connectionMat = scipy.io.loadmat(path + '/SkeletonConnectionMap.mat')
         self.connection = self.connectionMat['SkeletonConnectionMap']
@@ -354,7 +353,7 @@ class Application(tk.Frame):
             # add an RGBD Object in the list
             self.RGBD.append(RGBD.RGBD(path + '/Depth.tiff', path + '/RGB.tiff', self.intrinsic, fact))
             # load data in the RGBD Object
-            self.RGBD[bp].LoadMat(lImages,self.pos2d,self.connection,bdyIdx )
+            self.RGBD[bp].LoadMat(lImages,self.pos2d,self.connection)
             self.RGBD[bp].ReadFromMat(self.Index)
             # process depth image
             self.RGBD[bp].BilateralFilter(-1, 0.02, 3)
@@ -376,11 +375,11 @@ class Application(tk.Frame):
         img_label[:,:,1] = img_label_temp[:,:,1].copy()
         img_label[:,:,2] = img_label_temp[:,:,0].copy()
         img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16), 1:3] = 110
-        #cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
-        #cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
+        cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
+        cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
         print(str(self.Index) + " frame")
-        #cv2.imshow("label", img_label)
-        #cv2.waitKey()
+        cv2.imshow("label", img_label)
+        cv2.waitKey()
         if(self.Index<10):
                 imgstr = '00'+str(self.Index)
         elif(self.Index<100):
@@ -464,7 +463,7 @@ class Application(tk.Frame):
             # separate  each body parts of the image into different object -> each object have just the body parts in its depth image
             for bp in range(nbBdyPart):
                 newRGBD.append(RGBD.RGBD(path + '/Depth.tiff', path + '/RGB.tiff', self.intrinsic, fact))
-                newRGBD[bp].LoadMat(lImages,self.pos2d,self.connection,bdyIdx )              
+                newRGBD[bp].LoadMat(lImages,self.pos2d,self.connection)              
                 # Get new current image
                 newRGBD[bp].ReadFromMat(imgk) 
                 newRGBD[bp].BilateralFilter(-1, 0.02, 3)

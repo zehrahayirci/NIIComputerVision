@@ -797,8 +797,8 @@ class Segmentation(object):
         pos2D = self.pos2D-1  
 
         #create a sphere of radius 12 so that anything superior does not come in the feet label
-        handDist = 12# 
-        handDist = (max(LA.norm( (pos2D[wrist]-pos2D[idx])), LA.norm( (pos2D[handtip]-pos2D[idx])))*1.5).astype(np.int16)
+        handDist = 17# 
+        #handDist = (max(LA.norm( (pos2D[wrist]-pos2D[idx])), LA.norm( (pos2D[handtip]-pos2D[idx])))*1.5).astype(np.int16)
         #since feet are on the same detph as the floor some processing are required before using cc
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]
@@ -890,7 +890,8 @@ class Segmentation(object):
         pos2D = self.pos2D-1
 
         #create a sphere mask1 of radius 12 so that anything superior does not come in the feet label
-        footDist = (LA.norm((pos2D[disidx]-pos2D[idx]))*1.5).astype(np.int16)
+        footDist = 20
+        #footDist = (LA.norm((pos2D[disidx]-pos2D[idx]))*1.5).astype(np.int16)
         #since feet are on the same detph as the floor some processing are required before using cc
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]

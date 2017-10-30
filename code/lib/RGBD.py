@@ -39,13 +39,12 @@ class RGBD():
         self.intrinsic = intrinsic
         self.fact = fact
         
-    def LoadMat(self, Images,Pos_2D,BodyConnection,binImage):
+    def LoadMat(self, Images,Pos_2D,BodyConnection):
         """
         Load information in datasets into the RGBD object
         :param Images: List of depth images put in function of time
         :param Pos_2D: List of junctions position for each depth image
         :param BodyConnection: list of doublons that contains the number of pose that represent adjacent body parts
-        :param binImage: Binary image with the body suppodly in white
         :return:  none
         """
         self.lImages = Images
@@ -53,7 +52,6 @@ class RGBD():
         self.Index = -1
         self.pos2d = Pos_2D
         self.connection = BodyConnection
-        self.bw = binImage
         
     def ReadFromDisk(self):
         """
@@ -370,7 +368,6 @@ class RGBD():
         # distance head to neck. Let us assume this is enough for all borders
         distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)
         Box = self.depth_image
-        bwBox = self.bw[0,self.Index]
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
@@ -384,7 +381,6 @@ class RGBD():
         self.transCrop = np.array([colStart,lineStart,colEnd,lineEnd])
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
-        self.Croppedbw = bwBox[lineStart:lineEnd,colStart:colEnd]
 
     def BdyThresh(self):
         """
@@ -413,13 +409,9 @@ class RGBD():
         #bwmin = (self.CroppedBox >= meani-4*vari) 
         #bwmax = (self.CroppedBox <= meani+4*vari)
         bw0 = bwmin*bwmax
-        # Compare with the noised binary image given by the kinect
-        # to use this put res instead of bw0 as the return argument
-        thresh2,tmp = cv2.threshold(self.Croppedbw,0,1,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-        res = tmp * bw0
         # Remove all stand alone object
         bw0 = ( self.RemoveBG(bw0)>0)
-        return bw0#res
+        return bw0
 
     def BodySegmentation(self):
         """
