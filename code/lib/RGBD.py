@@ -685,7 +685,7 @@ class RGBD():
             self.SetTransfoMat3D(self.pca[i].components_,i)  
 
             # create the skeleton vtx
-            self.skeVtx.append(self.getSkeletonVtx(self.mask[i], self.coordsGbl[i][4][2]-self.coordsGbl[i][0][2]))
+            self.skeVtx.append(self.getSkeletonVtx(self.mask[i], (self.coordsGbl[i][4][2]+self.coordsGbl[i][0][2])/2))
             
     def FindCoord3D(self,i):       
         '''

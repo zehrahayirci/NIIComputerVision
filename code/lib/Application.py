@@ -328,9 +328,9 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = 'String4b'
-        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        mat = scipy.io.loadmat(path + '/String4b.mat')
+        matfilename = '031_0915_01'
+        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
         bdyIdx = mat['BodyIndex']
@@ -343,8 +343,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
 
         # number of images in the sequence. Start and End
-        self.Index = 191
-        nunImg = 220
+        self.Index = 3
+        nunImg = 14
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -496,8 +496,7 @@ class Application(tk.Frame):
 
             # Transform the stitch body in the current image (alignment current image mesh) 
             # New pose estimation
-            NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, Id4)
-
+            NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],newRGBD[0].skeVtx[0],preRGBD[0].skeVtx[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, Id4)
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
             nb_facesGlo = 0
@@ -515,7 +514,7 @@ class Application(tk.Frame):
                 #Skeleton tracking
                 print "BP: ", bp
                 Tbb_s.append(StitchBdy.GetBBTransfo(self.pos2d, imgk, formerIdx, self.RGBD[0], preRGBD[0], newRGBD[0], bp, NewPose))
-                Tbb_icp.append(Tracker.RegisterRGBDMesh_optimize(newRGBD[bp],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,np.dot(T_Pose[bp],Tg[bp]),1),StitchBdy.TransformNmls(Parts[bp].MC.Normales,np.dot(T_Pose[bp],Tg[bp]),1), np.dot(Tbb_s[bp], NewPose), pos=self.pos2d[0,imgk]) )
+                Tbb_icp.append(Tracker.RegisterRGBDMesh_optimize(newRGBD[bp],newRGBD[0].skeVtx[bp],preRGBD[0].skeVtx[bp],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,np.dot(T_Pose[bp],Tg[bp]),1),StitchBdy.TransformNmls(Parts[bp].MC.Normales,np.dot(T_Pose[bp],Tg[bp]),1), np.dot(Tbb_s[bp], NewPose)) )
                 #T_Pose[bp] = np.dot(NewPose, T_Pose[bp])
                 #T_Pose[bp] = np.dot(Tbb_s[bp], T_Pose[bp])
                 T_Pose[bp] = np.dot(Tbb_icp[bp], T_Pose[bp])
@@ -532,12 +531,12 @@ class Application(tk.Frame):
                 rendering = self.RGBD[0].DrawMesh(rendering,Parts[bp].MC.Vertices,Parts[bp].MC.Normales,PoseBP, 1, self.color_tag)
 
                 # TSDF Fusion of the body part
-                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP)
+                # Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP)
 
                 # Create Mesh
-                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                # Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)
+                # Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
