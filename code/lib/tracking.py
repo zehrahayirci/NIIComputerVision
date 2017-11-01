@@ -543,7 +543,7 @@ class Tracker():
                 pix = np.dot(NewImage.intrinsic,pix[0:Size[0],0:Size[1]].T).T
                 column_index = (np.round(pix[:,0])).astype(int)
                 line_index = (np.round(pix[:,1])).astype(int)
-                
+
                 # create matrix that have 0 when the conditions are not verified and 1 otherwise
                 cdt_column = (column_index > -1) * (column_index < NewImage.Size[1])
                 cdt_line = (line_index > -1) * (line_index < NewImage.Size[0])
@@ -641,3 +641,128 @@ class Tracker():
         
         return res        
 
+    def RegisterAllTs(self, NewImage, NewSkeVtx, PreSkeVtx, Vtx_bp):
+        '''
+        Function that estimate the relative rigid transformations of all bodypart between an input RGB-D images and model(vertex) with pre-frame pose
+        :param NewImage: RGBD image
+        :param NewSkeVtx: skeleton vertex
+        :param PreSkeVtx: skeleton vertex
+        :param Vtx_bp: list of vertices list of each body part
+        :return: Transform matrixs between Image and the mesh (transform from the pre-frame model to the current frame)
+        '''
+
+        # Initialize the Transformation of each body part with the I
+        Tr_bp = np.zeros((len(Vtx_bp),4,4), dtype = np.float32)
+        Tr_bp[:,0,0] = 1
+        Tr_bp[:,1,1] = 1
+        Tr_bp[:,2,2] = 1
+        Tr_bp[:,3,3] = 1
+
+        Tr_bp = Tr_bp.reshape((240))
+        # change Vtx_bp(list) into Vtx(np array) and get bp index array
+        Vtx_num = sum(Vtx_bp[i].shape[0] for i in range(1,len(Vtx_bp)))
+        Vtx = np.zeros((Vtx_num,3))
+        Vtx_bp_index = np.zeros(Vtx_num, np.int16)
+        index_st = 0
+        for bp in range(1,len(Vtx_bp)):
+            Vtx[index_st:index_st+Vtx_bp[bp].shape[0],:] = Vtx_bp[bp]
+            Vtx_bp_index[index_st:index_st+Vtx_bp[bp].shape[0]] = bp
+            index_st += Vtx_bp[bp].shape[0]
+
+        #for it in range(self.max_iter[0]):    
+        for it in range(1): 
+            # sample
+            sample_idx = np.random.randint(Vtx_bp_index.shape[0], size = 10000)
+
+            #print Tr_bp.reshape((len(Vtx_bp),4,4))
+            #print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
+            print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
+            
+            #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
+            #res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
+            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx, Vtx_bp_index,NewImage, NewSkeVtx, PreSkeVtx))
+            Tr_bp = res.x
+            
+            #print Tr_bp.reshape((len(Vtx_bp),4,4))
+            print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
+
+        return Tr_bp.reshape((len(Vtx_bp),4,4))
+
+import cv2
+# energy function
+def RegisterAllTs_function(Tr_bp, MeshVtx, MeshVtx_index, NewRGBD, NewSkeVtx, PreSkeVtx):
+    '''
+    The energy function with three terms
+    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
+    :param MeshVtx: the Vtx of all body part
+    :param MeshVtx_index: the body part index of MeshVtx 
+    :param NewRGBD: RGBD image
+    :retrun: cost list
+    '''
+    # sample
+    sample_idx = np.random.randint(MeshVtx_index.shape[0], size = 10000)
+    #MeshVtx = MeshVtx[sample_idx,:]
+    #MeshVtx_index = MeshVtx_index[sample_idx]
+
+    # get the 2Dmap of 3D point of new depth image
+    ImgVtx = NewRGBD.Vtx
+    Tr_bp = Tr_bp.reshape(15,4,4)
+
+    # first term (data term)
+    size = MeshVtx.shape
+    # find the correspondence 2D point by projection 
+    stack_pix = np.ones(size[0], dtype = np.float32) 
+    stack_pt = np.ones(size[0], dtype = np.float32) 
+    pix = np.zeros((size[0], 2), dtype = np.float32) 
+    pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
+    pt = np.stack((MeshVtx[:,0],MeshVtx[:,1],MeshVtx[:,2],stack_pt),axis = 1)
+    # transform vertices to camera pose
+    for i in range(MeshVtx_index.shape[0]):
+        pt[i,:] = np.dot(pt[i,:], Tr_bp[MeshVtx_index[i],:,:])
+    # project to 2D coordinate
+    lpt = np.split(pt, 4, axis=1)
+    lpt[2] = General.in_mat_zero2one(lpt[2])
+    # pix[0] = pt[0]/pt[2]
+    pix[:,0] = (lpt[0]/lpt[2]).reshape(size[0])
+    pix[:,1] = (lpt[1]/lpt[2]).reshape(size[0])
+    pix = np.dot(NewRGBD.intrinsic,pix.T).T.astype(np.int16)
+    mask = (pix[:,0]>=0) * (pix[:,0]<NewRGBD.Size[1]) * (pix[:,1]>=0) * (pix[:,1]<NewRGBD.Size[0])
+    mask = mask * (ImgVtx[pix[:,1],pix[:,0], 2]>0)
+    # get data term
+    term_data = (pt[:,0:3]-ImgVtx[pix[:,1]*mask, pix[:,0]*mask,:])
+    term_data = LA.norm(term_data, axis=1)
+    term_data[NewRGBD.labels[:]!=]
+    *mask
+
+    # second term(smooth term)
+    term_smooth = np.zeros(14)
+    Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+    for bp in range(1, 15):
+        term_smooth[bp-1] = LA.norm(Tr_bp[bp]-Id4)
+    
+    # third term(constraint term)
+    term_cons = np.zeros(13)
+    term_cons[0] = abs(LA.norm(Tr_bp[9,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[9][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
+    term_cons[1] = abs(LA.norm(Tr_bp[2,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[2][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
+    term_cons[2] = abs(LA.norm(Tr_bp[4,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[4][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
+    term_cons[3] = abs(LA.norm(Tr_bp[7,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[7][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
+    term_cons[4] = abs(LA.norm(Tr_bp[5,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[5][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
+    term_cons[5] = abs(LA.norm(Tr_bp[2,0:3,3]-Tr_bp[1,0:3,3])-LA.norm(NewRGBD.TransfoBB[2][0:3,3]-NewRGBD.TransfoBB[1][0:3,3]))
+    term_cons[6] = abs(LA.norm(Tr_bp[4,0:3,3]-Tr_bp[3,0:3,3])-LA.norm(NewRGBD.TransfoBB[4][0:3,3]-NewRGBD.TransfoBB[3][0:3,3]))
+    term_cons[7] = abs(LA.norm(Tr_bp[1,0:3,3]-Tr_bp[12,0:3,3])-LA.norm(NewRGBD.TransfoBB[1][0:3,3]-NewRGBD.TransfoBB[12][0:3,3]))
+    term_cons[8] = abs(LA.norm(Tr_bp[3,0:3,3]-Tr_bp[11,0:3,3])-LA.norm(NewRGBD.TransfoBB[3][0:3,3]-NewRGBD.TransfoBB[11][0:3,3]))
+    term_cons[9] = abs(LA.norm(Tr_bp[7,0:3,3]-Tr_bp[8,0:3,3])-LA.norm(NewRGBD.TransfoBB[7][0:3,3]-NewRGBD.TransfoBB[8][0:3,3]))
+    term_cons[10] = abs(LA.norm(Tr_bp[5,0:3,3]-Tr_bp[6,0:3,3])-LA.norm(NewRGBD.TransfoBB[5][0:3,3]-NewRGBD.TransfoBB[6][0:3,3]))
+    term_cons[11] = abs(LA.norm(Tr_bp[8,0:3,3]-Tr_bp[14,0:3,3])-LA.norm(NewRGBD.TransfoBB[8][0:3,3]-NewRGBD.TransfoBB[14][0:3,3]))
+    term_cons[11] = abs(LA.norm(Tr_bp[6,0:3,3]-Tr_bp[13,0:3,3])-LA.norm(NewRGBD.TransfoBB[6][0:3,3]-NewRGBD.TransfoBB[13][0:3,3]))
+
+    # junction term
+    term_jun = np.zeros(25)
+    stack_jun = np.ones(25, dtype = np.float32) 
+    #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
+    
+
+    # mix
+    term = np.concatenate((term_data*10, term_smooth, term_cons))
+
+    return sum(term)
