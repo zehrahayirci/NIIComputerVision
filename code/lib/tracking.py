@@ -679,8 +679,8 @@ class Tracker():
             print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
             
             #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            #res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx, Vtx_bp_index,NewImage, NewSkeVtx, PreSkeVtx))
+            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
+            #res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx, Vtx_bp_index,NewImage, NewSkeVtx, PreSkeVtx))
             Tr_bp = res.x
             
             #print Tr_bp.reshape((len(Vtx_bp),4,4))
@@ -730,10 +730,8 @@ def RegisterAllTs_function(Tr_bp, MeshVtx, MeshVtx_index, NewRGBD, NewSkeVtx, Pr
     mask = mask * (ImgVtx[pix[:,1],pix[:,0], 2]>0)
     # get data term
     term_data = (pt[:,0:3]-ImgVtx[pix[:,1]*mask, pix[:,0]*mask,:])
-    term_data = LA.norm(term_data, axis=1)
-    term_data[NewRGBD.labels[:]!=]
-    *mask
-
+    term_data = LA.norm(term_data, axis=1)*mask
+    
     # second term(smooth term)
     term_smooth = np.zeros(14)
     Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
