@@ -658,57 +658,72 @@ class Tracker():
         Tr_bp[:,2,2] = 1
         Tr_bp[:,3,3] = 1
 
-        Tr_bp = Tr_bp.reshape((240))
-        # change Vtx_bp(list) into Vtx(np array) and get bp index array
-        Vtx_num = sum(Vtx_bp[i].shape[0] for i in range(1,len(Vtx_bp)))
-        Vtx = np.zeros((Vtx_num,3))
-        Vtx_bp_index = np.zeros(Vtx_num, np.int16)
-        index_st = 0
+        #Tr_bp = Tr_bp.reshape((240))
+        # sampling
+        Vtx_bp_sample = []
+        Vtx_bp_sample.append(np.zeros((1,3)))
         for bp in range(1,len(Vtx_bp)):
-            Vtx[index_st:index_st+Vtx_bp[bp].shape[0],:] = Vtx_bp[bp]
-            Vtx_bp_index[index_st:index_st+Vtx_bp[bp].shape[0]] = bp
-            index_st += Vtx_bp[bp].shape[0]
+            sample_index = np.random.randint(Vtx_bp[bp].shape[0], size = int(Vtx_bp[bp].shape[0]/10))
+            Vtx_bp_sample.append(Vtx_bp[bp][sample_index,:])
 
+        #print Tr_bp.reshape((len(Vtx_bp),4,4))
+        #print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+
+        '''
+        # all Tr
         #for it in range(self.max_iter[0]):    
         for it in range(1): 
-            # sample
-            sample_idx = np.random.randint(Vtx_bp_index.shape[0], size = 10000)
-
-            #print Tr_bp.reshape((len(Vtx_bp),4,4))
-            #print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
-            print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
-            
             #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            #res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx, Vtx_bp_index,NewImage, NewSkeVtx, PreSkeVtx))
+            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx), method='Nelder-Mead', options={'maxiter':5000})
             Tr_bp = res.x
-            
-            #print Tr_bp.reshape((len(Vtx_bp),4,4))
-            print (RegisterAllTs_function(Tr_bp, Vtx, Vtx_bp_index, NewImage, NewSkeVtx, PreSkeVtx))
+        # check
+        if res.success:
+            print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+        else:
+            print res
+            print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+            print "unsuccessful"
+        '''
+        bp=1
+        RegisterTs_dataterm(Tr_bp[bp,:,:], Vtx_bp[bp], NewImage, NewImage.labels==bp)
+        # each Tr
+        # data term
+        for bp in range(1,len(Vtx_bp)):
+            res = sp.optimize.minimize(RegisterTs_dataterm, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewImage.labels==bp), method='Nelder-Mead')
+            Tr_bp[bp] = res.x.reshape(4,4)
+            if res.success==False:
+                print "bp" + str(bp) + " unsuccessful"
+        # three term
+        for bp in range(1,len(Vtx_bp)):
+            res = sp.optimize.minimize(RegisterTs_function, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewSkeVtx, PreSkeVtx, bp, Tr_bp), method='Nelder-Mead')
+            Tr_bp[bp] = res.x.reshape(4,4)
+            print "bp" + str(bp)
+            if res.success==False:
+                print "bp" + str(bp) + " unsuccessful"
 
         return Tr_bp.reshape((len(Vtx_bp),4,4))
 
 import cv2
 # energy function
-def RegisterAllTs_function(Tr_bp, MeshVtx, MeshVtx_index, NewRGBD, NewSkeVtx, PreSkeVtx):
+def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     '''
-    The energy function with three terms
-    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
-    :param MeshVtx: the Vtx of all body part
-    :param MeshVtx_index: the body part index of MeshVtx 
+    The data term of ine body part
+    :param Tr: Transformation of one body part 
+    :param MeshVtx: the Vtx in body part
     :param NewRGBD: RGBD image
+    :param labels: the label of body part 
     :retrun: cost list
-    '''
-    # sample
-    sample_idx = np.random.randint(MeshVtx_index.shape[0], size = 10000)
-    #MeshVtx = MeshVtx[sample_idx,:]
-    #MeshVtx_index = MeshVtx_index[sample_idx]
+    '''  
+    Tr = Tr.reshape(4,4)
 
     # get the 2Dmap of 3D point of new depth image
     ImgVtx = NewRGBD.Vtx
-    Tr_bp = Tr_bp.reshape(15,4,4)
 
-    # first term (data term)
+    # sample
+    sample_idx = np.random.randint(MeshVtx.shape[0], size = int(MeshVtx.shape[0]/10))
+    sample_idx = np.arange(MeshVtx.shape[0])
+    #MeshVtx = MeshVtx[sample_idx,:]
+
     size = MeshVtx.shape
     # find the correspondence 2D point by projection 
     stack_pix = np.ones(size[0], dtype = np.float32) 
@@ -717,8 +732,7 @@ def RegisterAllTs_function(Tr_bp, MeshVtx, MeshVtx_index, NewRGBD, NewSkeVtx, Pr
     pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
     pt = np.stack((MeshVtx[:,0],MeshVtx[:,1],MeshVtx[:,2],stack_pt),axis = 1)
     # transform vertices to camera pose
-    for i in range(MeshVtx_index.shape[0]):
-        pt[i,:] = np.dot(pt[i,:], Tr_bp[MeshVtx_index[i],:,:])
+    pt = np.dot(pt, Tr)
     # project to 2D coordinate
     lpt = np.split(pt, 4, axis=1)
     lpt[2] = General.in_mat_zero2one(lpt[2])
@@ -727,11 +741,38 @@ def RegisterAllTs_function(Tr_bp, MeshVtx, MeshVtx_index, NewRGBD, NewSkeVtx, Pr
     pix[:,1] = (lpt[1]/lpt[2]).reshape(size[0])
     pix = np.dot(NewRGBD.intrinsic,pix.T).T.astype(np.int16)
     mask = (pix[:,0]>=0) * (pix[:,0]<NewRGBD.Size[1]) * (pix[:,1]>=0) * (pix[:,1]<NewRGBD.Size[0])
-    mask = mask * (ImgVtx[pix[:,1],pix[:,0], 2]>0)
+    mask = mask * (ImgVtx[pix[:,1]*mask,pix[:,0]*mask, 2]>0)
     # get data term
     term_data = (pt[:,0:3]-ImgVtx[pix[:,1]*mask, pix[:,0]*mask,:])
     term_data = LA.norm(term_data, axis=1)*mask
-    
+    term_data[labels[pix[:,1]*mask,pix[:,0]*mask]==0] = 0.5
+
+    # testing
+    #a = labels*1.0
+    #a[pix[:,1],pix[:,0]] = 1.0
+    #cv2.imshow("",a)
+    #cv2.waitKey(1)
+
+    #return term_data
+    return sum(term_data)
+
+def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
+    '''
+    The energy function with three terms
+    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
+    :param MeshVtx_bp: the list of the Vtx in body part
+    :param NewRGBD: RGBD image
+    :retrun: cost list
+    '''    
+    Tr_bp = Tr_bp.reshape(15,4,4)
+
+    # first term (data term)
+    term_data = np.zeros(0)
+    for bp in range(1,len(MeshVtx_bp)):
+        term_data_bp = RegisterTs_dataterm(Tr_bp[bp], MeshVtx_bp[bp], NewRGBD, NewRGBD.labels==bp)
+        term_data = np.concatenate((term_data, term_data_bp))
+
+
     # second term(smooth term)
     term_smooth = np.zeros(14)
     Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
@@ -763,4 +804,69 @@ def RegisterAllTs_function(Tr_bp, MeshVtx, MeshVtx_index, NewRGBD, NewSkeVtx, Pr
     # mix
     term = np.concatenate((term_data*10, term_smooth, term_cons))
 
-    return sum(term)
+    return sum(term_data)
+
+
+def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
+    '''
+    The energy function with three terms
+    :param Tr: Transformation of one body part 
+    :param MeshVtx: the Vtx in body part
+    :param NewRGBD: RGBD image
+    :param bp: the index of body part
+    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
+    :retrun: cost list
+    '''    
+    Tr = Tr.reshape(4,4)
+
+    # first term (data term)
+    term_data = RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, NewRGBD.labels==bp)
+
+    # second term(smooth term)
+    Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+    term_smooth = LA.norm(Tr-Id4)
+    
+    # third term(constraint term)
+    term_cons = np.zeros(13)
+    if bp==1:
+        bp_n = [2,12]
+    elif bp==2:
+        bp_n = [1, 9]
+    elif bp==3:
+        bp_n = [4, 11]
+    elif bp==4:
+        bp_n = [3, 9]
+    elif bp==5:
+        bp_n = [6, 10]
+    elif bp==6:
+        bp_n = [5, 13]
+    elif bp==7:
+        bp_n = [8, 10]
+    elif bp==8:
+        bp_n = [7, 14]
+    elif bp==9:
+        bp_n = [10]
+    elif bp==10:
+        bp_n = [2, 4,7,5,9]
+    elif bp==11:
+        bp_n = [3]
+    elif bp==12:
+        bp_n = [1]
+    elif bp==13:
+        bp_n = [6]
+    else:
+        bp_n = [8]
+        
+    term_cons = np.zeros(len(bp_n))
+    for i in range(len(bp_n)):
+        term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
+    
+    # junction term
+    term_jun = np.zeros(25)
+    stack_jun = np.ones(25, dtype = np.float32) 
+    #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
+    
+    # mix
+    term = term_data*10+term_smooth+sum(term_cons)
+
+    return term
