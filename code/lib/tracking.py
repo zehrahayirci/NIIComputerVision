@@ -684,8 +684,7 @@ class Tracker():
             print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
             print "unsuccessful"
         '''
-        bp=1
-        RegisterTs_dataterm(Tr_bp[bp,:,:], Vtx_bp[bp], NewImage, NewImage.labels==bp)
+
         # each Tr
         # data term
         for bp in range(1,len(Vtx_bp)):
@@ -694,12 +693,12 @@ class Tracker():
             if res.success==False:
                 print "bp" + str(bp) + " unsuccessful"
         # three term
-        for bp in range(1,len(Vtx_bp)):
-            res = sp.optimize.minimize(RegisterTs_function, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewSkeVtx, PreSkeVtx, bp, Tr_bp), method='Nelder-Mead')
-            Tr_bp[bp] = res.x.reshape(4,4)
-            print "bp" + str(bp)
-            if res.success==False:
-                print "bp" + str(bp) + " unsuccessful"
+        for t in range(1):
+            for bp in range(1,len(Vtx_bp)):
+                res = sp.optimize.minimize(RegisterTs_function, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewSkeVtx, PreSkeVtx, bp, Tr_bp), method='Nelder-Mead')
+                Tr_bp[bp] = res.x.reshape(4,4)
+                if res.success==False:
+                    print "bp" + str(bp) + " unsuccessful"
 
         return Tr_bp.reshape((len(Vtx_bp),4,4))
 
@@ -867,6 +866,6 @@ def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
     
     # mix
-    term = term_data*10+term_smooth+sum(term_cons)
+    term = term_data*0.001+term_smooth+sum(term_cons)*10
 
     return term
