@@ -328,9 +328,9 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = 'String4b'
-        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        mat = scipy.io.loadmat(path + '/String4b.mat')
+        matfilename = '031_0915_01'
+        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
 
@@ -342,8 +342,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 191
-        nunImg = 220
+        self.Index = 3
+        nunImg = 25
         sImg = 1
 
         # Former Depth Image (i.e: i)

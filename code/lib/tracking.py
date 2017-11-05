@@ -674,7 +674,7 @@ class Tracker():
         #for it in range(self.max_iter[0]):    
         for it in range(1): 
             #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx), method='Nelder-Mead', options={'maxiter':5000})
+            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx), method='Nelder-Mead')
             Tr_bp = res.x
         # check
         if res.success:
@@ -688,7 +688,7 @@ class Tracker():
         # each Tr
         # data term
         for bp in range(1,len(Vtx_bp)):
-            res = sp.optimize.minimize(RegisterTs_dataterm, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewImage.labels==bp), method='Nelder-Mead')
+            res = sp.optimize.minimize(RegisterTs_dataterm, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewImage.labels>0), method='Nelder-Mead')
             Tr_bp[bp] = res.x.reshape(4,4)
             if res.success==False:
                 print "bp" + str(bp) + " unsuccessful"
@@ -699,6 +699,7 @@ class Tracker():
                 Tr_bp[bp] = res.x.reshape(4,4)
                 if res.success==False:
                     print "bp" + str(bp) + " unsuccessful"
+        #'''
 
         return Tr_bp.reshape((len(Vtx_bp),4,4))
 
@@ -768,7 +769,7 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     # first term (data term)
     term_data = np.zeros(0)
     for bp in range(1,len(MeshVtx_bp)):
-        term_data_bp = RegisterTs_dataterm(Tr_bp[bp], MeshVtx_bp[bp], NewRGBD, NewRGBD.labels==bp)
+        term_data_bp = RegisterTs_dataterm(Tr_bp[bp], MeshVtx_bp[bp], NewRGBD, NewRGBD.labels>0)
         term_data = np.concatenate((term_data, term_data_bp))
 
 
@@ -801,7 +802,7 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     
 
     # mix
-    term = np.concatenate((term_data*10, term_smooth, term_cons))
+    term = np.concatenate((term_data*0.001, term_smooth, term_cons))
 
     return sum(term_data)
 
@@ -819,7 +820,7 @@ def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     Tr = Tr.reshape(4,4)
 
     # first term (data term)
-    term_data = RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, NewRGBD.labels==bp)
+    term_data = RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, NewRGBD.labels>0)
 
     # second term(smooth term)
     Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
@@ -866,6 +867,6 @@ def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
     
     # mix
-    term = term_data*0.001+term_smooth+sum(term_cons)*10
+    term = term_data*0.001+term_smooth+sum(term_cons)
 
     return term
