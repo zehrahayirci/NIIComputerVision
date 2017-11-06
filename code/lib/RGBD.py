@@ -366,7 +366,7 @@ class RGBD():
         minH = np.min(pos2D[:,0])
         maxH = np.max(pos2D[:,0])
         # distance head to neck. Let us assume this is enough for all borders
-        distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)
+        distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)+15
         Box = self.depth_image
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
@@ -397,7 +397,7 @@ class RGBD():
         mini =  np.min(bdy)
         #print "mini: %u" % (mini)
         maxi = np.max(bdy)
-        #print "max: %u" % (maxi)     
+        #print "max: %u" % (maxi)
         # double threshold according to the value of the depth
         bwmin = (self.CroppedBox > mini-0.01*max_value) 
         bwmax = (self.CroppedBox < maxi+0.01*max_value)
@@ -601,7 +601,7 @@ class RGBD():
         #print "making pointcloud process time: %f" % (elapsed_time3)    
 
         return res
-    
+
     def getSkeletonVtx(self, mask, depth):
         """
         calculate the skeleton in 3D
@@ -621,8 +621,8 @@ class RGBD():
         y = d * pos2D[:,1]
         z = d
         return np.dstack((x,y,z))    
-
-
+    
+           
     def myPCA(self, dims_rescaled_data=3):
         # dims_rescaled_data useless
         """
@@ -679,7 +679,7 @@ class RGBD():
             # create the skeleton vtx
             self.skeVtx.append(self.getSkeletonVtx(self.mask[i], (self.coordsGbl[i][4][2]+self.coordsGbl[i][0][2])/2))
             self.skeVtx[0][0,self.skeVtx[0][0,:,2]==0,0:3] = self.skeVtx[i][0,self.skeVtx[0][0,:,2]==0,0:3]
-
+            
     def FindCoord3D(self,i):       
         '''
         draw the bounding boxes in 3D for each part of the human body
