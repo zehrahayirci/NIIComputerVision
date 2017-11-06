@@ -651,12 +651,16 @@ class Tracker():
         :return: Transform matrixs between Image and the mesh (transform from the pre-frame model to the current frame)
         '''
 
-        # Initialize the Transformation of each body part with the I
+        # Initialize the Transformation of each body part with the skeleton
         Tr_bp = np.zeros((len(Vtx_bp),4,4), dtype = np.float32)
         Tr_bp[:,0,0] = 1
         Tr_bp[:,1,1] = 1
         Tr_bp[:,2,2] = 1
         Tr_bp[:,3,3] = 1
+        for bp in range(1,len(Vtx_bp)):
+            bp_n = getConnectBP(bp)
+            meanSkeTran = np.mean(NewSkeVtx[0,bp_n,:] - PreSkeVtx[0,bp_n,:], axis=0)
+            Tr_bp[bp][0:3,3] = meanSkeTran
 
         #Tr_bp = Tr_bp.reshape((240))
         # sampling
@@ -684,7 +688,7 @@ class Tracker():
             print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
             print "unsuccessful"
         '''
-
+        
         # each Tr
         # data term
         for bp in range(1,len(Vtx_bp)):
@@ -692,6 +696,8 @@ class Tracker():
             Tr_bp[bp] = res.x.reshape(4,4)
             if res.success==False:
                 print "bp" + str(bp) + " unsuccessful"
+        return Tr_bp
+
         # three term
         for t in range(1):
             for bp in range(1,len(Vtx_bp)):
@@ -705,9 +711,46 @@ class Tracker():
 
 import cv2
 # energy function
+def getConnectBP(bp):
+    '''
+    return the list of connected ody part index
+    :param bp: the index of body part
+    :retrun: connected bp list
+    '''  
+    if bp==1:
+        bp_n = [2,12]
+    elif bp==2:
+        bp_n = [1, 9]
+    elif bp==3:
+        bp_n = [4, 11]
+    elif bp==4:
+        bp_n = [3, 9]
+    elif bp==5:
+        bp_n = [6, 10]
+    elif bp==6:
+        bp_n = [5, 13]
+    elif bp==7:
+        bp_n = [8, 10]
+    elif bp==8:
+        bp_n = [7, 14]
+    elif bp==9:
+        bp_n = [10]
+    elif bp==10:
+        bp_n = [2, 4,7,5,9]
+    elif bp==11:
+        bp_n = [3]
+    elif bp==12:
+        bp_n = [1]
+    elif bp==13:
+        bp_n = [6]
+    else:
+        bp_n = [8]
+    
+    return bp_n
+
 def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     '''
-    The data term of ine body part
+    The data term of one body part
     :param Tr: Transformation of one body part 
     :param MeshVtx: the Vtx in body part
     :param NewRGBD: RGBD image
@@ -748,13 +791,32 @@ def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     term_data[labels[pix[:,1]*mask,pix[:,0]*mask]==0] = 0.5
 
     # testing
-    #a = labels*1.0
+    #a = labels*0.5
     #a[pix[:,1],pix[:,0]] = 1.0
     #cv2.imshow("",a)
     #cv2.waitKey(1)
 
     #return term_data
     return sum(term_data)
+
+def RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp):
+    '''
+    The constraint term of one body part
+    :param Tr: Transformation of one body part 
+    :param NewRGBD: RGBD image
+    :param bp: the index of body part
+    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
+    :retrun: cost list
+    '''  
+
+    bp_n = getConnectBP(bp)
+    term_cons = np.zeros(len(bp_n))
+    for i in range(len(bp_n)):
+        term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
+    
+    #return term_cons
+    return sum(term_cons)
+
 
 def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     '''
@@ -780,20 +842,12 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
         term_smooth[bp-1] = LA.norm(Tr_bp[bp]-Id4)
     
     # third term(constraint term)
-    term_cons = np.zeros(13)
-    term_cons[0] = abs(LA.norm(Tr_bp[9,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[9][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
-    term_cons[1] = abs(LA.norm(Tr_bp[2,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[2][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
-    term_cons[2] = abs(LA.norm(Tr_bp[4,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[4][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
-    term_cons[3] = abs(LA.norm(Tr_bp[7,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[7][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
-    term_cons[4] = abs(LA.norm(Tr_bp[5,0:3,3]-Tr_bp[10,0:3,3])-LA.norm(NewRGBD.TransfoBB[5][0:3,3]-NewRGBD.TransfoBB[10][0:3,3]))
-    term_cons[5] = abs(LA.norm(Tr_bp[2,0:3,3]-Tr_bp[1,0:3,3])-LA.norm(NewRGBD.TransfoBB[2][0:3,3]-NewRGBD.TransfoBB[1][0:3,3]))
-    term_cons[6] = abs(LA.norm(Tr_bp[4,0:3,3]-Tr_bp[3,0:3,3])-LA.norm(NewRGBD.TransfoBB[4][0:3,3]-NewRGBD.TransfoBB[3][0:3,3]))
-    term_cons[7] = abs(LA.norm(Tr_bp[1,0:3,3]-Tr_bp[12,0:3,3])-LA.norm(NewRGBD.TransfoBB[1][0:3,3]-NewRGBD.TransfoBB[12][0:3,3]))
-    term_cons[8] = abs(LA.norm(Tr_bp[3,0:3,3]-Tr_bp[11,0:3,3])-LA.norm(NewRGBD.TransfoBB[3][0:3,3]-NewRGBD.TransfoBB[11][0:3,3]))
-    term_cons[9] = abs(LA.norm(Tr_bp[7,0:3,3]-Tr_bp[8,0:3,3])-LA.norm(NewRGBD.TransfoBB[7][0:3,3]-NewRGBD.TransfoBB[8][0:3,3]))
-    term_cons[10] = abs(LA.norm(Tr_bp[5,0:3,3]-Tr_bp[6,0:3,3])-LA.norm(NewRGBD.TransfoBB[5][0:3,3]-NewRGBD.TransfoBB[6][0:3,3]))
-    term_cons[11] = abs(LA.norm(Tr_bp[8,0:3,3]-Tr_bp[14,0:3,3])-LA.norm(NewRGBD.TransfoBB[8][0:3,3]-NewRGBD.TransfoBB[14][0:3,3]))
-    term_cons[11] = abs(LA.norm(Tr_bp[6,0:3,3]-Tr_bp[13,0:3,3])-LA.norm(NewRGBD.TransfoBB[6][0:3,3]-NewRGBD.TransfoBB[13][0:3,3]))
+    term_cons = np.zeros(26)
+    t = 0
+    for bp in range(1, len(MeshVtx_bp)):
+        term_cons_bp = RegisterTs_constraintterm(Tr_bp[bp], NewRGBD, bp, Tr_bp)
+        term_cons[t:t+term_cons_bp.shape[0]] = term_cons_bp
+        t += term_cons_bp.shape[0]
 
     # junction term
     term_jun = np.zeros(25)
@@ -827,39 +881,7 @@ def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     term_smooth = LA.norm(Tr-Id4)
     
     # third term(constraint term)
-    term_cons = np.zeros(13)
-    if bp==1:
-        bp_n = [2,12]
-    elif bp==2:
-        bp_n = [1, 9]
-    elif bp==3:
-        bp_n = [4, 11]
-    elif bp==4:
-        bp_n = [3, 9]
-    elif bp==5:
-        bp_n = [6, 10]
-    elif bp==6:
-        bp_n = [5, 13]
-    elif bp==7:
-        bp_n = [8, 10]
-    elif bp==8:
-        bp_n = [7, 14]
-    elif bp==9:
-        bp_n = [10]
-    elif bp==10:
-        bp_n = [2, 4,7,5,9]
-    elif bp==11:
-        bp_n = [3]
-    elif bp==12:
-        bp_n = [1]
-    elif bp==13:
-        bp_n = [6]
-    else:
-        bp_n = [8]
-        
-    term_cons = np.zeros(len(bp_n))
-    for i in range(len(bp_n)):
-        term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
+    term_cons = RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp)
     
     # junction term
     term_jun = np.zeros(25)
@@ -867,6 +889,6 @@ def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
     
     # mix
-    term = term_data*0.001+term_smooth+sum(term_cons)
+    term = term_data*0.001+term_smooth+term_cons
 
     return term

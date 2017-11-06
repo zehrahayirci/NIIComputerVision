@@ -610,7 +610,7 @@ class RGBD():
         :retrun: list of vertices of skeleton
         """
         # get pos2D
-        pos2D = self.pos2d[0,self.Index]-1
+        pos2D = self.pos2d[0,self.Index].astype(np.double)-1
         # get depth and d=0 if d output bodypart 
         d = np.ones(pos2D.shape[0])*depth
         d = d*mask[pos2D[:,1].astype(np.int16), pos2D[:,0].astype(np.int16)]
@@ -678,7 +678,8 @@ class RGBD():
 
             # create the skeleton vtx
             self.skeVtx.append(self.getSkeletonVtx(self.mask[i], (self.coordsGbl[i][4][2]+self.coordsGbl[i][0][2])/2))
-                        
+            self.skeVtx[0][0,self.skeVtx[0][0,:,2]==0,0:3] = self.skeVtx[i][0,self.skeVtx[0][0,:,2]==0,0:3]
+
     def FindCoord3D(self,i):       
         '''
         draw the bounding boxes in 3D for each part of the human body
