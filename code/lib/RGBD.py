@@ -366,7 +366,7 @@ class RGBD():
         minH = np.min(pos2D[:,0])
         maxH = np.max(pos2D[:,0])
         # distance head to neck. Let us assume this is enough for all borders
-        distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)
+        distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)+15
         Box = self.depth_image
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
