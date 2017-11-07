@@ -658,7 +658,7 @@ class Tracker():
         Tr_bp[:,2,2] = 1
         Tr_bp[:,3,3] = 1
         for bp in range(1,len(Vtx_bp)):
-            bp_n = getConnectBP(bp)
+            bp_n = RGBD.getConnectBP(bp)
             meanSkeTran = np.mean(NewSkeVtx[0,bp_n,:] - PreSkeVtx[0,bp_n,:], axis=0)
             Tr_bp[bp][0:3,3] = meanSkeTran
 
@@ -712,42 +712,6 @@ class Tracker():
 
 import cv2
 # energy function
-def getConnectBP(bp):
-    '''
-    return the list of connected ody part index
-    :param bp: the index of body part
-    :retrun: connected bp list
-    '''  
-    if bp==1:
-        bp_n = [2,12]
-    elif bp==2:
-        bp_n = [1, 9]
-    elif bp==3:
-        bp_n = [4, 11]
-    elif bp==4:
-        bp_n = [3, 9]
-    elif bp==5:
-        bp_n = [6, 10]
-    elif bp==6:
-        bp_n = [5, 13]
-    elif bp==7:
-        bp_n = [8, 10]
-    elif bp==8:
-        bp_n = [7, 14]
-    elif bp==9:
-        bp_n = [10]
-    elif bp==10:
-        bp_n = [2, 4,7,5,9]
-    elif bp==11:
-        bp_n = [3]
-    elif bp==12:
-        bp_n = [1]
-    elif bp==13:
-        bp_n = [6]
-    else:
-        bp_n = [8]
-    
-    return bp_n
 
 def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     '''
@@ -810,7 +774,7 @@ def RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp):
     :retrun: cost list
     '''  
 
-    bp_n = getConnectBP(bp)
+    bp_n = RGBD.getConnectBP(bp)
     term_cons = np.zeros(len(bp_n))
     for i in range(len(bp_n)):
         term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
