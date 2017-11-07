@@ -658,7 +658,7 @@ class Tracker():
         Tr_bp[:,2,2] = 1
         Tr_bp[:,3,3] = 1
         for bp in range(1,len(Vtx_bp)):
-            bp_n = RGBD.getConnectBP(bp)
+            bp_n = General.getConnectBP(bp)
             meanSkeTran = np.mean(NewSkeVtx[0,bp_n,:] - PreSkeVtx[0,bp_n,:], axis=0)
             Tr_bp[bp][0:3,3] = meanSkeTran
 
@@ -774,7 +774,7 @@ def RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp):
     :retrun: cost list
     '''  
 
-    bp_n = RGBD.getConnectBP(bp)
+    bp_n = General.getConnectBP(bp)
     term_cons = np.zeros(len(bp_n))
     for i in range(len(bp_n)):
         term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))

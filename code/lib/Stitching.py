@@ -5,6 +5,7 @@ Created on Fri Jul 14 17:50:19 2017
 @author: Inoe ANDRE
 """
 
+import cv2
 import numpy as np
 import math
 from math import cos, sin
@@ -26,6 +27,7 @@ class Stitch():
         self.nb_bp = number_bodyPart
         self.StitchedVertices = 0
         self.StitchedFaces = 0
+        self.StitchedNormales = 0
 
     def NaiveStitch(self, PartVtx,PartNmls,PartFaces,PoseBP):
         """
@@ -385,3 +387,99 @@ class Stitch():
             mid = 19
 
         return np.array([pos1,pos2,mid])
+
+
+    def getOverlapping(self, Parts, PoseBP, bp, RGBD):
+        '''
+        get the Overlapping region of one body part
+        :param Parts: the list of Bodyparts
+        :param PoseBP: the list of local to global transform
+        :param bp: number of the body part
+        :param RGBD: the depth image and intrinsic matrix
+        :return: none
+        '''
+        # get bp vertices
+        #initial
+        Vtx = Parts[bp].MC.Vertices
+        Nmls = Parts[bp].MC.Normales
+        Pose = PoseBP[bp]
+        size = RGBD.Size
+        #transform
+        stack_pix = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
+        stack_pt = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
+        pix = np.zeros( (np.size(Vtx[ :,:],0),2) , dtype = np.float32)
+        pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
+        pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+        pt = np.dot(pt,Pose.T)
+        nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
+        nmle[ :,:] = np.dot(Nmls[ :,:],Pose[0:3,0:3].T)
+        #projection in 2D space
+        lpt = np.split(pt,4,axis=1)
+        lpt[2] = General.in_mat_zero2one(lpt[2])
+        pix[ :,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
+        pix[ :,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
+        pix = np.dot(pix,RGBD.intrinsic.T)
+        #get 2d coordinate and index map
+        column_index = (np.round(pix[:,0])).astype(int)
+        line_index = (np.round(pix[:,1])).astype(int)
+        indexmap = np.arange(Vtx.shape[0])
+        #create matrix that have 0 when the conditions are not verified and 1 otherwise
+        cdt_column = (column_index > -1) * (column_index < size[1])
+        cdt_line = (line_index > -1) * (line_index < size[0])
+        cdt = cdt_column*cdt_line
+        line_index = line_index*cdt
+        column_index = column_index*cdt
+        #result 
+        bp_map = np.zeros((size[0], size[1] ,2), dtype=np.float32)
+        bp_map[line_index, column_index,0] = 1*cdt
+        bp_map[line_index, column_index,1] = indexmap
+
+        # get connected bp vertices
+        bp_n = General.getConnectBP(bp)
+        bp_n_map = np.zeros((size[0], size[1]), dtype=np.float32)
+        for i in bp_n:
+            #initial
+            Vtx = Parts[i].MC.Vertices
+            Nmls = Parts[i].MC.Normales
+            Pose = PoseBP[i]
+            #transform
+            stack_pix = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
+            stack_pt = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
+            pix = np.zeros( (np.size(Vtx[ :,:],0),2) , dtype = np.float32)
+            pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
+            pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+            pt = np.dot(pt,Pose.T)
+            nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
+            nmle[ :,:] = np.dot(Nmls[ :,:],Pose[0:3,0:3].T)
+            #projection in 2D space
+            lpt = np.split(pt,4,axis=1)
+            lpt[2] = General.in_mat_zero2one(lpt[2])
+            pix[ :,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
+            pix[ :,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
+            pix = np.dot(pix,RGBD.intrinsic.T)
+            #get 2d coordinate and index map
+            column_index = (np.round(pix[:,0])).astype(int)
+            line_index = (np.round(pix[:,1])).astype(int)
+            #create matrix that have 0 when the conditions are not verified and 1 otherwise
+            cdt_column = (column_index > -1) * (column_index < size[1])
+            cdt_line = (line_index > -1) * (line_index < size[0])
+            cdt = cdt_column*cdt_line
+            line_index = line_index*cdt
+            column_index = column_index*cdt
+            #result
+            bp_n_map[line_index, column_index] = 1*cdt
+        
+        index_i, index_y = np.where(1.0*(bp_map[:,:,0]==1)*(bp_n_map==1)==1)
+        overlap_index = bp_map[index_i,index_y,1].astype(np.int16)
+
+        #set Vertice and Normals
+        if bp==1:
+            self.StitchedVertices = self.TransformVtx(Parts[bp].MC.Vertices[overlap_index,:],PoseBP[bp],1)
+            self.StitchedNormales = self.TransformNmls(Parts[bp].MC.Normales[overlap_index,:],PoseBP[bp],1)
+            
+        else:
+            PartVertices = self.TransformVtx(Parts[bp].MC.Vertices[overlap_index,:],PoseBP[bp],1)
+            PartNormales = self.TransformNmls(Parts[bp].MC.Normales[overlap_index,:],PoseBP[bp],1)
+            self.StitchedVertices = np.concatenate((self.StitchedVertices,PartVertices))
+            self.StitchedNormales = np.concatenate((self.StitchedNormales,PartNormales))
+

@@ -264,13 +264,13 @@ class RGBD():
         return result
 
 
-    def DrawMesh(self, rendering,Vtx,Nmls,Pose, s, color = 0) :
+    def DrawMesh(self, rendering,Vtx,Nmls,Pose, s, color = 2) :
         """
         Project vertices and normales from a mesh in 2D images
         :param rendering : 2D image for overlay purpose or black image
         :param Pose: camera pose
         :param s: subsampling the cloud of points
-        :param color: if there is a color image put color in the image
+        :param color: if color=0, put color in the image, if color=1, put boolean in the image
         :return: scene projected in 2D space
         """
         result = rendering#np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)#
@@ -304,6 +304,8 @@ class RGBD():
             result[line_index[:], column_index[:]]= np.dstack((self.color_image[ line_index[:], column_index[:],2]*cdt, \
                                                                     self.color_image[ line_index[:], column_index[:],1]*cdt, \
                                                                     self.color_image[ line_index[:], column_index[:],0]*cdt) )
+        elif (color == 1):
+            result[line_index[:], column_index[:]]= 1.0
         else:
             result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ ::s,0]+1.0)*(255./2.)*cdt, \
                                                                        ((nmle[ ::s,1]+1.0)*(255./2.))*cdt, \
@@ -809,40 +811,3 @@ class RGBD():
         img.putdata(newData)
         return img                
                 
-
-def getConnectBP(bp):
-    '''
-    return the list of connected ody part index
-    :param bp: the index of body part
-    :retrun: connected bp list
-    '''  
-    if bp==1:
-        bp_n = [2,12]
-    elif bp==2:
-        bp_n = [1, 9]
-    elif bp==3:
-        bp_n = [4, 11]
-    elif bp==4:
-        bp_n = [3, 9]
-    elif bp==5:
-        bp_n = [6, 10]
-    elif bp==6:
-        bp_n = [5, 13]
-    elif bp==7:
-        bp_n = [8, 10]
-    elif bp==8:
-        bp_n = [7, 14]
-    elif bp==9:
-        bp_n = [10]
-    elif bp==10:
-        bp_n = [2, 4,7,5,9]
-    elif bp==11:
-        bp_n = [3]
-    elif bp==12:
-        bp_n = [1]
-    elif bp==13:
-        bp_n = [6]
-    else:
-        bp_n = [8]
-    
-    return bp_n
