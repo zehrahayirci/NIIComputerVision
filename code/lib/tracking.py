@@ -609,8 +609,8 @@ class Tracker():
                                                       + nmle[:,2]*(NewImage.Vtx[line_index[:], column_index[:]][:,2] - pt[:,2])) )
                 # Solving sum(A.t * A) = sum(A.t * b) ref newcombe kinect fusion
                 # fisrt part of the linear equation
-                Buffer_B = np.concatenate((Buffer_B, Buffer_B_jun))
-                Buffer = np.concatenate((Buffer, Buffer_jun))
+                #Buffer_B = np.concatenate((Buffer_B, Buffer_B_jun))
+                #Buffer = np.concatenate((Buffer, Buffer_jun))
                 A = np.dot(Buffer.transpose(), Buffer)
                 b = np.dot(Buffer.transpose(), Buffer_B)
                 
@@ -671,7 +671,7 @@ class Tracker():
             Vtx_bp_sample.append(Vtx_bp[bp][sample_index,:])
 
         #print Tr_bp.reshape((len(Vtx_bp),4,4))
-        #print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+        print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
 
         '''
         # all Tr
@@ -695,8 +695,7 @@ class Tracker():
             res = sp.optimize.minimize(RegisterTs_dataterm, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewImage.labels>0), method='Nelder-Mead')
             Tr_bp[bp] = res.x.reshape(4,4)
             if res.success==False:
-                print "bp" + str(bp) + " unsuccessful"
-        return Tr_bp
+                print "bp" + str(bp) + " unsuccessful"    
 
         # three term
         for t in range(1):
@@ -706,6 +705,8 @@ class Tracker():
                 if res.success==False:
                     print "bp" + str(bp) + " unsuccessful"
         #'''
+
+        print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
 
         return Tr_bp.reshape((len(Vtx_bp),4,4))
 
@@ -775,7 +776,7 @@ def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
     pt = np.stack((MeshVtx[:,0],MeshVtx[:,1],MeshVtx[:,2],stack_pt),axis = 1)
     # transform vertices to camera pose
-    pt = np.dot(pt, Tr)
+    pt = np.dot(Tr, pt.T).T
     # project to 2D coordinate
     lpt = np.split(pt, 4, axis=1)
     lpt[2] = General.in_mat_zero2one(lpt[2])
@@ -791,8 +792,8 @@ def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     term_data[labels[pix[:,1]*mask,pix[:,0]*mask]==0] = 0.5
 
     # testing
-    #a = labels*0.5
-    #a[pix[:,1],pix[:,0]] = 1.0
+    #a = labels*0.3
+    #a[pix[:,1],pix[:,0]] += 0.7
     #cv2.imshow("",a)
     #cv2.waitKey(1)
 
@@ -829,10 +830,12 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     Tr_bp = Tr_bp.reshape(15,4,4)
 
     # first term (data term)
-    term_data = np.zeros(0)
+    #term_data = np.zeros(0)
+    term_data = 0
     for bp in range(1,len(MeshVtx_bp)):
         term_data_bp = RegisterTs_dataterm(Tr_bp[bp], MeshVtx_bp[bp], NewRGBD, NewRGBD.labels>0)
-        term_data = np.concatenate((term_data, term_data_bp))
+        #term_data = np.concatenate((term_data, term_data_bp))
+        term_data = term_data+term_data_bp
 
 
     # second term(smooth term)
@@ -846,8 +849,9 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     t = 0
     for bp in range(1, len(MeshVtx_bp)):
         term_cons_bp = RegisterTs_constraintterm(Tr_bp[bp], NewRGBD, bp, Tr_bp)
-        term_cons[t:t+term_cons_bp.shape[0]] = term_cons_bp
-        t += term_cons_bp.shape[0]
+        #term_cons[t:t+term_cons_bp.shape[0]] = term_cons_bp
+        term_cons[bp] = term_cons_bp
+        #t += term_cons_bp.shape[0]
 
     # junction term
     term_jun = np.zeros(25)
@@ -856,9 +860,10 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     
 
     # mix
-    term = np.concatenate((term_data*0.001, term_smooth, term_cons))
+    #term = np.concatenate((term_data*0.001, term_smooth, term_cons))
+    term = (term_data*0.001)+sum(term_smooth)+sum(term_cons)
 
-    return sum(term_data)
+    return term
 
 
 def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
