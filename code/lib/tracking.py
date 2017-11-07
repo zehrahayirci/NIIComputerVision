@@ -661,6 +661,7 @@ class Tracker():
             bp_n = RGBD.getConnectBP(bp)
             meanSkeTran = np.mean(NewSkeVtx[0,bp_n,:] - PreSkeVtx[0,bp_n,:], axis=0)
             Tr_bp[bp][0:3,3] = meanSkeTran
+        initTr_bp = Tr_bp 
 
         #Tr_bp = Tr_bp.reshape((240))
         # sampling
@@ -671,21 +672,21 @@ class Tracker():
             Vtx_bp_sample.append(Vtx_bp[bp][sample_index,:])
 
         #print Tr_bp.reshape((len(Vtx_bp),4,4))
-        print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+        print (RegisterAllTs_function(Tr_bp, initTr_bp,Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
 
         '''
         # all Tr
         #for it in range(self.max_iter[0]):    
         for it in range(1): 
-            #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx), method='Nelder-Mead')
+            #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( initTr_bp, Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
+            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx), method='Nelder-Mead')
             Tr_bp = res.x
         # check
         if res.success:
-            print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+            print (RegisterAllTs_function(Tr_bp, initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
         else:
             print res
-            print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+            print (RegisterAllTs_function(Tr_bp, initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
             print "unsuccessful"
         '''
         
@@ -700,13 +701,13 @@ class Tracker():
         # three term
         for t in range(1):
             for bp in range(1,len(Vtx_bp)):
-                res = sp.optimize.minimize(RegisterTs_function, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewSkeVtx, PreSkeVtx, bp, Tr_bp), method='Nelder-Mead')
+                res = sp.optimize.minimize(RegisterTs_function, Tr_bp[bp,:,:], args=( initTr_bp[bp], Vtx_bp[bp], NewImage, NewSkeVtx, PreSkeVtx, bp, Tr_bp), method='Nelder-Mead')
                 Tr_bp[bp] = res.x.reshape(4,4)
                 if res.success==False:
                     print "bp" + str(bp) + " unsuccessful"
         #'''
 
-        print (RegisterAllTs_function(Tr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+        print (RegisterAllTs_function(Tr_bp, initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
 
         return Tr_bp.reshape((len(Vtx_bp),4,4))
 
@@ -783,7 +784,7 @@ def RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp):
     return sum(term_cons)
 
 
-def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
+def RegisterAllTs_function(Tr_bp, initTr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     '''
     The energy function with three terms
     :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
@@ -803,10 +804,9 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
 
 
     # second term(smooth term)
-    term_smooth = np.zeros(14)
-    Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+    term_smooth = np.zeros(14) 
     for bp in range(1, 15):
-        term_smooth[bp-1] = LA.norm(Tr_bp[bp]-Id4)
+        term_smooth[bp-1] = LA.norm(Tr_bp[bp]-initTr_bp[bp])
     
     # third term(constraint term)
     term_cons = np.zeros(26)
@@ -830,10 +830,11 @@ def RegisterAllTs_function(Tr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
     return term
 
 
-def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
+def RegisterTs_function(Tr, initTr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     '''
     The energy function with three terms
     :param Tr: Transformation of one body part 
+    :param initTr: the initialized Transformation of one body part 
     :param MeshVtx: the Vtx in body part
     :param NewRGBD: RGBD image
     :param bp: the index of body part
@@ -846,8 +847,8 @@ def RegisterTs_function(Tr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
     term_data = RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, NewRGBD.labels>0)
 
     # second term(smooth term)
-    Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-    term_smooth = LA.norm(Tr-Id4)
+    #Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+    term_smooth = LA.norm(Tr-initTr)
     
     # third term(constraint term)
     term_cons = RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp)
