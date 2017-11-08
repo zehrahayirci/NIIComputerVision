@@ -434,10 +434,11 @@ class Stitch():
         bp_map[line_index, column_index,0] = 1*cdt
         bp_map[line_index, column_index,1] = indexmap
 
-        # get connected bp vertices
-        bp_n = General.getConnectBP(bp)
+        # get the other bp vertices
         bp_n_map = np.zeros((size[0], size[1]), dtype=np.float32)
-        for i in bp_n:
+        for i in range(1,len(PoseBP)):
+            if i==bp:
+                continue
             #initial
             Vtx = Parts[i].MC.Vertices
             Nmls = Parts[i].MC.Normales

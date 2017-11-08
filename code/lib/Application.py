@@ -328,7 +328,7 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = '081_0915_02'
+        matfilename = '081_0915_01'
         mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
         #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
@@ -342,8 +342,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 29
-        nunImg = 57
+        self.Index = 36
+        nunImg = 74
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -560,6 +560,8 @@ class Application(tk.Frame):
                 
                 # save vertex in global of each body part
                 globalVtx_bp.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp],1))
+                # output mesh in global of each body part
+                #Parts[bp].MC.SaveToPlyExt("bodyGlobal"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp],1),Parts[bp].MC.Faces,0)
 
             formerIdx = imgk
             time_lapsed = time.time() - start
