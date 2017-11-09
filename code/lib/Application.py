@@ -328,9 +328,9 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = 'String4b'
-        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        mat = scipy.io.loadmat(path + '/String4b.mat')
+        matfilename = '031_1027_01'
+        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
 
@@ -342,8 +342,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 191
-        nunImg = 193
+        self.Index = 1
+        nunImg = 26
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -421,7 +421,8 @@ class Application(tk.Frame):
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
-        
+        Parts[1].MC.SaveToPlyExt("skeleton.ply",25,0,self.RGBD[0].skeVtx[0],[])
+
         # projection in 2d space to draw the 3D model
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         for bp in range(bpstart,nbBdyPart):
@@ -500,7 +501,7 @@ class Application(tk.Frame):
             # Transform the stitch body in the current image (alignment current image mesh) 
             # New pose estimation
             #NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],newRGBD[0].skeVtx[0],preRGBD[0].skeVtx[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, Id4)
-            NewPoses = Tracker.RegisterAllTs(newRGBD[0], newRGBD[0].skeVtx[0],preRGBD[0].skeVtx[0], globalVtx_bp)
+            NewPoses = Tracker.RegisterAllTs(newRGBD[0], newRGBD[0].skeVtx,preRGBD[0].skeVtx, globalVtx_bp)
             
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0

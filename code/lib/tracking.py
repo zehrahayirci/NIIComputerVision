@@ -658,8 +658,8 @@ class Tracker():
         Tr_bp[:,2,2] = 1
         Tr_bp[:,3,3] = 1
         for bp in range(1,len(Vtx_bp)):
-            bp_n = RGBD.getConnectBP(bp)
-            meanSkeTran = np.mean(NewSkeVtx[0,bp_n,:] - PreSkeVtx[0,bp_n,:], axis=0)
+            p_n = RGBD.getBodypartPoseIndex(bp)
+            meanSkeTran = np.mean(NewSkeVtx[0,p_n,:] - PreSkeVtx[0,p_n,:], axis=0)
             Tr_bp[bp][0:3,3] = meanSkeTran
         initTr_bp = Tr_bp 
 

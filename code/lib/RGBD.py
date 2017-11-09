@@ -323,6 +323,33 @@ class RGBD():
         self.Vtx = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)[:, :, 0:3]
         self.Nmls = np.dot(Pose[0:3,0:3],self.Nmls.transpose(0,2,1)).transpose(1,2,0)
 
+    def project3D22D(self, vtx, Tr= np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)):
+        """
+        Project vertices from 3d coordinate into 2D images
+        :param vtx : points in 3D coordinate
+        :param Tr: transformation
+        :return: points in 2D coordinate and mask
+        """
+        size = vtx.shape
+        # find the correspondence 2D point by projection 
+        stack_pix = np.ones(size[0], dtype = np.float32) 
+        stack_pt = np.ones(size[0], dtype = np.float32) 
+        pix = np.zeros((size[0], 2), dtype = np.float32) 
+        pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
+        pt = np.stack((vtx[:,0],vtx[:,1],vtx[:,2],stack_pt),axis = 1)
+        # transform vertices to camera pose
+        pt = np.dot(Tr, pt.T).T
+        # project to 2D coordinate
+        lpt = np.split(pt, 4, axis=1)
+        lpt[2] = General.in_mat_zero2one(lpt[2])
+        # pix[0] = pt[0]/pt[2]
+        pix[:,0] = (lpt[0]/lpt[2]).reshape(size[0])
+        pix[:,1] = (lpt[1]/lpt[2]).reshape(size[0])
+        pix = np.dot(self.intrinsic,pix.T).T.astype(np.int16)
+        mask = (pix[:,0]>=0) * (pix[:,0]<self.Size[1]) * (pix[:,1]>=0) * (pix[:,1]<self.Size[0])
+
+        return pix, mask
+
 ##################################################################
 ###################Bilateral Smooth Funtion#######################
 ##################################################################
@@ -602,24 +629,55 @@ class RGBD():
 
         return res
 
-    def getSkeletonVtx(self, mask, depth):
+    def getSkeletonVtx(self):
         """
         calculate the skeleton in 3D
-        :param mask: a matrix containing one only in the body parts indexes, 0 otherwise
-        :param depth: depth value of skeleton (the cetnter of z axis on global coordinate)
-        :retrun: list of vertices of skeleton
+        :retrun: none
         """
         # get pos2D
         pos2D = self.pos2d[0,self.Index].astype(np.double)-1
-        # get depth and d=0 if d output bodypart 
-        d = np.ones(pos2D.shape[0])*depth
-        d = d*mask[pos2D[:,1].astype(np.int16), pos2D[:,0].astype(np.int16)]
+        # initialize
+        skedepth = np.zeros(25)
+
+        # compute depth of each junction
+        for i in range(25):
+            if i==0 or i == 1 or i == 20:
+                j=10
+            elif i==2 or i==3:
+                j=9
+            elif i==4 or i==5:
+                j=2
+            elif i==6:
+                j=1
+            elif i==7 or i==21 or i==22:
+                j=12
+            elif i==8 or i==9:
+                j=4
+            elif i==10:
+                j=3
+            elif i==11 or i==23 or i==24:
+                j=11
+            elif i==12:
+                j=7
+            elif i==13 or i==14:
+                j=8
+            elif i==15:
+                j=13
+            elif i==16:
+                j=5
+            elif i==17 or i==18:
+                j=6
+            elif i==19:
+                j=14
+            depth = abs(self.coordsGbl[j][4,2]-self.coordsGbl[j][0,2])/2
+            skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
+        
         #  project to 3D
         pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
         pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
-        x = d * pos2D[:,0]
-        y = d * pos2D[:,1]
-        z = d
+        x = skedepth * pos2D[:,0]
+        y = skedepth * pos2D[:,1]
+        z = skedepth
         return np.dstack((x,y,z))    
     
            
@@ -652,8 +710,6 @@ class RGBD():
         self.coordsGbl.append([0.,0.,0.])
         self.mask=[]
         self.mask.append([0.,0.,0.])
-        self.skeVtx=[]
-        self.skeVtx.append(np.zeros((1,25,3)))
         for i in range(1,self.bdyPart.shape[0]+1):
             self.mask.append( (self.labels == i) )
             # compute center of 3D
@@ -676,10 +732,9 @@ class RGBD():
             #Create local to global transform
             self.SetTransfoMat3D(self.pca[i].components_,i)  
 
-            # create the skeleton vtx
-            self.skeVtx.append(self.getSkeletonVtx(self.mask[i], (self.coordsGbl[i][4][2]+self.coordsGbl[i][0][2])/2))
-            self.skeVtx[0][0,self.skeVtx[0][0,:,2]==0,0:3] = self.skeVtx[i][0,self.skeVtx[0][0,:,2]==0,0:3]
-            
+        # create the skeleton vtx
+        self.skeVtx = self.getSkeletonVtx()
+
     def FindCoord3D(self,i):       
         '''
         draw the bounding boxes in 3D for each part of the human body
@@ -812,7 +867,7 @@ class RGBD():
 
 def getConnectBP(bp):
     '''
-    return the list of connected ody part index
+    return the list of connected body part index
     :param bp: the index of body part
     :retrun: connected bp list
     '''  
@@ -846,3 +901,39 @@ def getConnectBP(bp):
         bp_n = [8]
     
     return bp_n
+
+def getBodypartPoseIndex(bp):
+    '''
+    return the list of junction index of body part
+    :param bp: the index of body part
+    :retrun: connected bp list
+    ''' 
+    if bp==1:
+        pos = [5,6]
+    if bp==2:
+        pos = [4,5]
+    if bp==3:
+        pos = [9, 10]
+    if bp==4:
+        pos = [8,9]
+    if bp==5:
+        pos = [16,17]
+    if bp==6:
+        pos = [17, 18]
+    if bp==7:
+        pos = [12,13]
+    if bp==8:
+        pos = [13,14]
+    if bp==9:
+        pos = [3,2]
+    if bp==10:
+        pos = [20, 1, 0, 4, 8]
+    if bp==11:
+        pos = [11]
+    if bp==12:
+        pos = [7]
+    if bp==13:
+        pos = [15]
+    if bp==14:
+        pos = [19]
+    return pos
