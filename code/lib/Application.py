@@ -328,9 +328,9 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = '081_0915_01'
-        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        #mat = scipy.io.loadmat(path + '/String4b.mat')
+        matfilename = 'String4b'
+        #mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
+        mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
 
@@ -342,8 +342,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 36
-        nunImg = 74
+        self.Index = 191
+        nunImg = 220
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -421,7 +421,8 @@ class Application(tk.Frame):
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
-        
+        Parts[1].MC.SaveToPlyExt("skeleton.ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
+
         # projection in 2d space to draw the 3D model
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         for bp in range(bpstart,nbBdyPart):
@@ -499,8 +500,8 @@ class Application(tk.Frame):
 
             # Transform the stitch body in the current image (alignment current image mesh) 
             # New pose estimation
-            NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],newRGBD[0].skeVtx[0],preRGBD[0].skeVtx[0],StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, Id4)
-            #NewPoses = Tracker.RegisterAllTs(newRGBD[0], newRGBD[0].skeVtx[0],preRGBD[0].skeVtx[0], globalVtx_bp)
+            NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],newRGBD[0].skeVtx,preRGBD[0].skeVtx,StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, Id4)
+            #NewPoses = Tracker.RegisterAllTs(newRGBD[0], newRGBD[0].skeVtx,preRGBD[0].skeVtx, globalVtx_bp)
             
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
@@ -514,14 +515,14 @@ class Application(tk.Frame):
             
             # projection in 2d space to draw the 3D model
             rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
-
+          
             # Updating mesh of each body part
             for bp in range(1,nbBdyPart):
                 # Transform in the current image
                 #Skeleton tracking
                 print "BP: ", bp
                 Tbb_s.append(StitchBdy.GetBBTransfo(self.pos2d, imgk, formerIdx, self.RGBD[0], preRGBD[0], newRGBD[0], bp, NewPose))
-                Tbb_icp.append(Tracker.RegisterRGBDMesh_optimize(newRGBD[bp],newRGBD[0].skeVtx[bp],preRGBD[0].skeVtx[bp],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,np.dot(T_Pose[bp],Tg[bp]),1),StitchBdy.TransformNmls(Parts[bp].MC.Normales,np.dot(T_Pose[bp],Tg[bp]),1), np.dot(Tbb_s[bp], NewPose)) )
+                Tbb_icp.append(Tracker.RegisterRGBDMesh_optimize(newRGBD[bp],newRGBD[0].skeVtx,preRGBD[0].skeVtx,StitchBdy.TransformVtx(Parts[bp].MC.Vertices,np.dot(T_Pose[bp],Tg[bp]),1),StitchBdy.TransformNmls(Parts[bp].MC.Normales,np.dot(T_Pose[bp],Tg[bp]),1), np.dot(Tbb_s[bp], NewPose)) )
                 #T_Pose[bp] = np.dot(NewPose, T_Pose[bp])
                 #T_Pose[bp] = np.dot(Tbb_s[bp], T_Pose[bp])
                 T_Pose[bp] = np.dot(Tbb_icp[bp], T_Pose[bp])
@@ -545,7 +546,7 @@ class Application(tk.Frame):
                 Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
                 Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
-
+    
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
                 nb_facesGlo = nb_facesGlo +Parts[bp].MC.nb_faces[0]
@@ -570,6 +571,7 @@ class Application(tk.Frame):
             # save with the number of the body part
             imgkStr = str(imgk)
             Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
+            Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
             rendering_overlapping =np.zeros((self.Size[0], self.Size[1]), dtype = np.uint8)
             # get overlapping region of each body part
             overlapBdy = Stitcher.Stitch(nbBdyPart) 
