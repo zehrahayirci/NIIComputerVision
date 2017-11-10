@@ -106,7 +106,7 @@ class Segmentation(object):
                 y = y-1
                 # keep track of the perpendicular slope
                 x = int(np.round(-(b*y+c)/a))
-                inImage = (x>0) and (x<col) and (y>0) and (y<line)
+                inImage = (x>=0) and (x<col) and (y>=0) and (y<line)
                 if(inImage):
                     # if an edge is reached
                     if A[y,x]==0:
@@ -130,7 +130,7 @@ class Segmentation(object):
                 y = y+1
                 # keep track of the perpendicular slope
                 x = int(np.round(-(b*y+c)/a))
-                inImage = (x>0) and (x<col) and (y>0) and (y<line)
+                inImage = (x>=0) and (x<col) and (y>=0) and (y<line)
                 if(inImage):
                     # if an edge is reached
                     if A[y,x]==0:
@@ -161,7 +161,7 @@ class Segmentation(object):
                 x = x-1
                 # keep the track of the perpendicular slope
                 y = int(np.round(-(a*x+c)/b))
-                inImage = (x>0) and (x<col) and (y>0) and (y<line)
+                inImage = (x>=0) and (x<col) and (y>=0) and (y<line)
                 if inImage:
                     # if an edge is reached
                     if A[int(y),int(x)]==0:
@@ -185,7 +185,7 @@ class Segmentation(object):
                 x = x+1
                 # keep the track of the perpendicular slope
                 y = int(np.round(-(a*x+c)/b))
-                inImage = (x>0) and (x<col) and (y>0) and (y<line)
+                inImage = (x>=0) and (x<col) and (y>=0) and (y<line)
                 if inImage:
                     # if an edge is reached
                     if A[int(y),int(x)]==0:
@@ -206,7 +206,7 @@ class Segmentation(object):
             left = [x_left, y_left]
             right = [x_right, y_right]
         return [left, right]
-    
+        
     
 
     def polygon(self,slopes,ref,  limit  ):
@@ -452,7 +452,7 @@ class Segmentation(object):
         
         # compute the intersection between the slope and the extremety of the body
         # And get two corners of the segmented body parts
-        intersection_elbow=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[elbow],0.5*bone/2)
+        intersection_elbow=self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[elbow],0.5*bone/1.6)
         vect_elbow = intersection_elbow[0]-pos2D[elbow]
         
         # Slope forearm
@@ -513,10 +513,14 @@ class Segmentation(object):
         points[4, :] = [pos2D[elbow,0], pos2D[3][1]]
         B1 = np.logical_and( (A==0),self.polygonOutline(points))
         f = np.nonzero(B1)
-        # find the minimum in distance to shoulder
-        d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
-        peakshoulder = np.array([f[1][d],f[0][d]])
-
+        if(sum(sum(f))==0):
+            print("there is not hole between shoulder and body")
+            peakshoulder = np.array([(pos2D[elbow,0]*2+pos2D[20,0])/3,(pos2D[elbow,1]*2+pos2D[20,1])/3])
+        else:
+            # find the minimum in distance to shoulder
+            d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
+            peakshoulder = np.array([f[1][d],f[0][d]])
+        
         
         slopesTorso=self.findSlope(pos2D[20],pos2D[shoulder])
         
@@ -575,16 +579,42 @@ class Segmentation(object):
             # find the minimum in distance to shoulder
             d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
             peakArmpit = np.array([f[1][d],f[0][d]])
-            if(side == 0 and sum(A[peakArmpit[1], peakArmpit[0]+1:-1])==0):
-                print "the peakArmpit is wrong"
-                peakArmpit = np.array([pos2D[shoulder,0], pos2D[1,1]])
-            if(side != 0 and sum(A[peakArmpit[1], 0:peakArmpit[0]])==0):
-                print "the peakArmpit is wrong"
-                peakArmpit = np.array([pos2D[shoulder,0], pos2D[1,1]])
         else:
             print "there is no hole between the arm and body"
-            peakArmpit = np.array([pos2D[shoulder,0], pos2D[1,1]])
-            
+            region = A*0.0
+            if side==0:
+                region[int(pos2D[20,1]):int(pos2D[0,1]),int(pos2D[20,0]):] = 1
+            else:
+                region[int(pos2D[20,1]):int(pos2D[0,1]), 0:int(pos2D[20,0])] = 1
+            B1 = np.logical_and( (A==0),region)
+            f = np.nonzero(B1)
+            if(sum(sum(f))!=0):
+                # find the minimum in distance to shoulder
+                d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
+                peakArmpit = np.array([f[1][d],f[0][d]])
+            else:
+                print "the peakArmpit is wrong1"
+                peakArmpit = np.array([pos2D[shoulder,0], pos2D[1,1]])
+        # constraint on peakArmpit
+        if side == 0 and peakArmpit[0]>intersection_elbow[0][0]:
+            print "meet the constrains on peakArmpitR"
+            peakArmpit = intersection_elbow[0]
+        elif side==1 and peakArmpit[0]<intersection_elbow[1][0]:
+            print "meet the constrains on peakArmpitL"
+            peakArmpit = intersection_elbow[1]
+        
+        # check if intersection is on the head
+        if peakshoulder[1]<pos2D[2][1]:
+            temp = peakshoulder
+            peakshoulder[1] = pos2D[2][1]
+            slopesPeakShoulder = self.findSlope(temp,np.array([peakArmpit[0], peakArmpit[1]]))
+            if(side==0):
+                print("peakshoulder is upper the neck R")
+                peakshoulder[0] = np.round(-(slopesPeakShoulder[1]*peakshoulder[1]+slopesPeakShoulder[2])/slopesPeakShoulder[0])
+            else:
+                print("peakshoulder is upper the neck L")
+                peakshoulder[0] = np.round(-(slopesPeakShoulder[1]*peakshoulder[1]+slopesPeakShoulder[2])/slopesPeakShoulder[0])
+
         # create the upperarm polygon out the five point defining it
         if side != 0 :
             ptA = np.stack((intersection_elbow[0],intersection_shoulder[0],peakshoulder,peakArmpit,intersection_elbow[1]))
@@ -797,8 +827,8 @@ class Segmentation(object):
         pos2D = self.pos2D-1  
 
         #create a sphere of radius 12 so that anything superior does not come in the feet label
-        handDist = 12# 
-        handDist = (max(LA.norm( (pos2D[wrist]-pos2D[idx])), LA.norm( (pos2D[handtip]-pos2D[idx])))*1.5).astype(np.int16)
+        handDist = 25# 
+        #handDist = (max(LA.norm( (pos2D[wrist]-pos2D[idx])), LA.norm( (pos2D[handtip]-pos2D[idx])))*1.5).astype(np.int16)
         #since feet are on the same detph as the floor some processing are required before using cc
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]
@@ -834,7 +864,13 @@ class Segmentation(object):
         threshold = labeled[pos2D[idx,1],pos2D[idx,0]]
         if(binaryImage[pos2D[idx,1],pos2D[idx,0]]==0 ): # meet hole and noise in depth image
             print("meet hand's hole")
-            if(binaryImage[pos2D[idx,1]+1,pos2D[idx,0]]!=0):
+            if(binaryImage[pos2D[idx,1],pos2D[idx,0]+2]!=0):
+                print("hand right")
+                threshold =  labeled[pos2D[idx,1],pos2D[idx,0]+2]
+            elif(binaryImage[pos2D[idx,1],pos2D[idx,0]-2]!=0):
+                print("hand left")
+                threshold =  labeled[pos2D[idx,1],pos2D[idx,0]-2]
+            elif(binaryImage[pos2D[idx,1]+1,pos2D[idx,0]]!=0):
                 print("hand lower")
                 threshold =  labeled[pos2D[idx,1]+1,pos2D[idx,0]]
             elif(binaryImage[pos2D[idx,1]-1,pos2D[idx,0]]!=0):
@@ -890,7 +926,8 @@ class Segmentation(object):
         pos2D = self.pos2D-1
 
         #create a sphere mask1 of radius 12 so that anything superior does not come in the feet label
-        footDist = (LA.norm((pos2D[disidx]-pos2D[idx]))*1.5).astype(np.int16)
+        footDist = 25
+        #footDist = (LA.norm((pos2D[disidx]-pos2D[idx]))*1.5).astype(np.int16)
         #since feet are on the same detph as the floor some processing are required before using cc
         line = self.depthImage.shape[0]
         col = self.depthImage.shape[1]

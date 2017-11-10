@@ -39,13 +39,12 @@ class RGBD():
         self.intrinsic = intrinsic
         self.fact = fact
         
-    def LoadMat(self, Images,Pos_2D,BodyConnection,binImage):
+    def LoadMat(self, Images,Pos_2D,BodyConnection):
         """
         Load information in datasets into the RGBD object
         :param Images: List of depth images put in function of time
         :param Pos_2D: List of junctions position for each depth image
         :param BodyConnection: list of doublons that contains the number of pose that represent adjacent body parts
-        :param binImage: Binary image with the body suppodly in white
         :return:  none
         """
         self.lImages = Images
@@ -53,7 +52,6 @@ class RGBD():
         self.Index = -1
         self.pos2d = Pos_2D
         self.connection = BodyConnection
-        self.bw = binImage
         
     def ReadFromDisk(self):
         """
@@ -266,13 +264,13 @@ class RGBD():
         return result
 
 
-    def DrawMesh(self, rendering,Vtx,Nmls,Pose, s, color = 0) :
+    def DrawMesh(self, rendering,Vtx,Nmls,Pose, s, color = 2) :
         """
         Project vertices and normales from a mesh in 2D images
         :param rendering : 2D image for overlay purpose or black image
         :param Pose: camera pose
         :param s: subsampling the cloud of points
-        :param color: if there is a color image put color in the image
+        :param color: if color=0, put color in the image, if color=1, put boolean in the image
         :return: scene projected in 2D space
         """
         result = rendering#np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)#
@@ -306,6 +304,8 @@ class RGBD():
             result[line_index[:], column_index[:]]= np.dstack((self.color_image[ line_index[:], column_index[:],2]*cdt, \
                                                                     self.color_image[ line_index[:], column_index[:],1]*cdt, \
                                                                     self.color_image[ line_index[:], column_index[:],0]*cdt) )
+        elif (color == 1):
+            result[line_index[:], column_index[:]]= 1.0
         else:
             result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ ::s,0]+1.0)*(255./2.)*cdt, \
                                                                        ((nmle[ ::s,1]+1.0)*(255./2.))*cdt, \
@@ -324,6 +324,33 @@ class RGBD():
         pt = np.dstack((self.Vtx, stack_pt))
         self.Vtx = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)[:, :, 0:3]
         self.Nmls = np.dot(Pose[0:3,0:3],self.Nmls.transpose(0,2,1)).transpose(1,2,0)
+
+    def project3D22D(self, vtx, Tr= np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)):
+        """
+        Project vertices from 3d coordinate into 2D images
+        :param vtx : points in 3D coordinate
+        :param Tr: transformation
+        :return: points in 2D coordinate and mask
+        """
+        size = vtx.shape
+        # find the correspondence 2D point by projection 
+        stack_pix = np.ones(size[0], dtype = np.float32) 
+        stack_pt = np.ones(size[0], dtype = np.float32) 
+        pix = np.zeros((size[0], 2), dtype = np.float32) 
+        pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
+        pt = np.stack((vtx[:,0],vtx[:,1],vtx[:,2],stack_pt),axis = 1)
+        # transform vertices to camera pose
+        pt = np.dot(Tr, pt.T).T
+        # project to 2D coordinate
+        lpt = np.split(pt, 4, axis=1)
+        lpt[2] = General.in_mat_zero2one(lpt[2])
+        # pix[0] = pt[0]/pt[2]
+        pix[:,0] = (lpt[0]/lpt[2]).reshape(size[0])
+        pix[:,1] = (lpt[1]/lpt[2]).reshape(size[0])
+        pix = np.dot(self.intrinsic,pix.T).T.astype(np.int16)
+        mask = (pix[:,0]>=0) * (pix[:,0]<self.Size[1]) * (pix[:,1]>=0) * (pix[:,1]<self.Size[0])
+
+        return pix, mask
 
 ##################################################################
 ###################Bilateral Smooth Funtion#######################
@@ -368,9 +395,8 @@ class RGBD():
         minH = np.min(pos2D[:,0])
         maxH = np.max(pos2D[:,0])
         # distance head to neck. Let us assume this is enough for all borders
-        distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)
+        distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)+15
         Box = self.depth_image
-        bwBox = self.bw[0,self.Index]
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
@@ -384,7 +410,6 @@ class RGBD():
         self.transCrop = np.array([colStart,lineStart,colEnd,lineEnd])
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
-        self.Croppedbw = bwBox[lineStart:lineEnd,colStart:colEnd]
 
     def BdyThresh(self):
         """
@@ -406,13 +431,9 @@ class RGBD():
         bwmin = (self.CroppedBox > mini-0.01*max_value) 
         bwmax = (self.CroppedBox < maxi+0.01*max_value)
         bw0 = bwmin*bwmax
-        # Compare with the noised binary image given by the kinect
-        # to use this put res instead of bw0 as the return argument
-        thresh2,tmp = cv2.threshold(self.Croppedbw,0,1,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-        res = tmp * bw0
         # Remove all stand alone object
         bw0 = ( self.RemoveBG(bw0)>0)
-        return bw0#res
+        return bw0
 
     def BodySegmentation(self):
         """
@@ -493,8 +514,8 @@ class RGBD():
         legLeft[1] = calfL         color = [255,255,180] = #ffffb4     very light yellow     label = 8
         head = headB               color = [255,0,0]     = #ff0000     red                   label = 9
         body = body                color = [255,255,255] = #ffffff     white                 label = 10
-        handRight = right hand     color = [0,100,0]     = #006400     dark green            label = 11
-        handLeft = left hand       color = [0,191,255]   = #00bfff     turquoise             label = 12
+        handRight = right hand     color = [0,191,255]   = #00bfff     turquoise             label = 11
+        handLeft = left hand       color = [0,100,0]     = #006400     dark green            label = 12
         footRight = right foot     color = [199,21,133]  = #c715ff     dark purple           label = 13
         footLeft = left foot       color = [255,165,0]   = #ffa500     orange                label = 14
         '''
@@ -609,7 +630,72 @@ class RGBD():
         #print "making pointcloud process time: %f" % (elapsed_time3)    
 
         return res
-    
+
+    def getSkeletonVtx(self):
+        """
+        calculate the skeleton in 3D
+        :retrun: none
+        """
+        # get pos2D
+        pos2D = self.pos2d[0,self.Index].astype(np.double)-1
+        # initialize
+        skedepth = np.zeros(25)
+
+        # compute depth of each junction
+        for i in range(21): # since 21~24 uesless
+            if i==0 or i == 1 or i == 20:
+                j=10
+            elif i==2 or i==3:
+                j=9
+            elif i==4 or i==5:
+                j=2
+            elif i==6:
+                j=1
+            elif i==7 or i==21 or i==22:
+                j=12
+            elif i==8 or i==9:
+                j=4
+            elif i==10:
+                j=3
+            elif i==11 or i==23 or i==24:
+                j=11
+            elif i==12:
+                j=7
+            elif i==13 or i==14:
+                j=8
+            elif i==15:
+                j=13
+            elif i==16:
+                j=5
+            elif i==17 or i==18:
+                j=6
+            elif i==19:
+                j=14
+            
+            depth = abs(self.coordsGbl[j][4,2]-self.coordsGbl[j][0,2])/2
+            if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:                
+                skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
+            else:
+                print "meet the pose " + str(i) + "==0 when getting junction"
+                if self.labels[int(pos2D[i][1])+1, int(pos2D[i][0])]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1])+1, int(pos2D[i][0])]+depth
+                elif self.labels[int(pos2D[i][1]), int(pos2D[i][0])+1]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])+1]+depth
+                elif self.labels[int(pos2D[i][1])-1, int(pos2D[i][0])]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1])-1, int(pos2D[i][0])]+depth
+                elif self.labels[int(pos2D[i][1]), int(pos2D[i][0])-1]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])-1]+depth
+                else:
+                    "QAQQQQ"
+                    exit()
+
+        #  project to 3D
+        pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
+        pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
+        x = skedepth * pos2D[:,0]
+        y = skedepth * pos2D[:,1]
+        z = skedepth
+        return np.dstack((x,y,z))    
     
            
     def myPCA(self, dims_rescaled_data=3):
@@ -663,7 +749,9 @@ class RGBD():
             #Create local to global transform
             self.SetTransfoMat3D(self.pca[i].components_,i)  
 
-            
+        # create the skeleton vtx
+        self.skeVtx = self.getSkeletonVtx()
+
     def FindCoord3D(self,i):       
         '''
         draw the bounding boxes in 3D for each part of the human body

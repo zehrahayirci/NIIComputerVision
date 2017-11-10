@@ -100,3 +100,76 @@ def normalized_cross_prod_optimize(a, b):
     # norm division
     res = division_by_norm(res, norm_mat_res)
     return res
+
+def getConnectBP(bp):
+    '''
+    return the list of connected body part index
+    :param bp: the index of body part
+    :retrun: connected bp list
+    '''  
+    if bp==1:
+        bp_n = [2,12]
+    elif bp==2:
+        bp_n = [1, 9]
+    elif bp==3:
+        bp_n = [4, 11]
+    elif bp==4:
+        bp_n = [3, 9]
+    elif bp==5:
+        bp_n = [6, 7,10]
+    elif bp==6:
+        bp_n = [5, 13]
+    elif bp==7:
+        bp_n = [5, 8, 10]
+    elif bp==8:
+        bp_n = [7, 14]
+    elif bp==9:
+        bp_n = [2,4,10]
+    elif bp==10:
+        bp_n = [2, 4,7,5,9]
+    elif bp==11:
+        bp_n = [3]
+    elif bp==12:
+        bp_n = [1]
+    elif bp==13:
+        bp_n = [6]
+    else:
+        bp_n = [8]
+    
+    return bp_n
+
+def getBodypartPoseIndex(bp):
+    '''
+    return the list of junction index of body part
+    :param bp: the index of body part
+    :retrun: connected bp list
+    ''' 
+    if bp==1:
+        pos = [5,6]
+    if bp==2:
+        pos = [4,5]
+    if bp==3:
+        pos = [9, 10]
+    if bp==4:
+        pos = [8,9]
+    if bp==5:
+        pos = [16,17]
+    if bp==6:
+        pos = [17, 18]
+    if bp==7:
+        pos = [12,13]
+    if bp==8:
+        pos = [13,14]
+    if bp==9:
+        pos = [3,2]
+    if bp==10:
+        pos = [20, 1, 0, 4, 8]
+    if bp==11:
+        pos = [11]
+    if bp==12:
+        pos = [7]
+    if bp==13:
+        pos = [15]
+    if bp==14:
+        pos = [19]
+    return pos
