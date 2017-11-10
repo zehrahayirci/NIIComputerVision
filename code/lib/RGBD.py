@@ -640,7 +640,7 @@ class RGBD():
         skedepth = np.zeros(25)
 
         # compute depth of each junction
-        for i in range(25):
+        for i in range(21): # since 21~24 uesless
             if i==0 or i == 1 or i == 20:
                 j=10
             elif i==2 or i==3:
@@ -669,9 +669,24 @@ class RGBD():
                 j=6
             elif i==19:
                 j=14
+            
             depth = abs(self.coordsGbl[j][4,2]-self.coordsGbl[j][0,2])/2
-            skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
-        
+            if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:                
+                skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
+            else:
+                print "meet the pose " + str(i) + "==0 when getting junction"
+                if self.labels[int(pos2D[i][1])+1, int(pos2D[i][0])]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1])+1, int(pos2D[i][0])]+depth
+                elif self.labels[int(pos2D[i][1]), int(pos2D[i][0])+1]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])+1]+depth
+                elif self.labels[int(pos2D[i][1])-1, int(pos2D[i][0])]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1])-1, int(pos2D[i][0])]+depth
+                elif self.labels[int(pos2D[i][1]), int(pos2D[i][0])-1]!=0:
+                    skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])-1]+depth
+                else:
+                    "QAQQQQ"
+                    exit()
+
         #  project to 3D
         pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
         pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
@@ -880,15 +895,15 @@ def getConnectBP(bp):
     elif bp==4:
         bp_n = [3, 9]
     elif bp==5:
-        bp_n = [6, 10]
+        bp_n = [6, 7,10]
     elif bp==6:
         bp_n = [5, 13]
     elif bp==7:
-        bp_n = [8, 10]
+        bp_n = [5, 8, 10]
     elif bp==8:
         bp_n = [7, 14]
     elif bp==9:
-        bp_n = [10]
+        bp_n = [2,4,10]
     elif bp==10:
         bp_n = [2, 4,7,5,9]
     elif bp==11:

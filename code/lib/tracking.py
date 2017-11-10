@@ -662,7 +662,7 @@ class Tracker():
             meanSkeTran = np.mean(NewSkeVtx[0,p_n,:] - PreSkeVtx[0,p_n,:], axis=0)
             Tr_bp[bp][0:3,3] = meanSkeTran
         initTr_bp = Tr_bp 
-
+        
         #Tr_bp = Tr_bp.reshape((240))
         # sampling
         Vtx_bp_sample = []
@@ -697,7 +697,7 @@ class Tracker():
             Tr_bp[bp] = res.x.reshape(4,4)
             if res.success==False:
                 print "bp" + str(bp) + " unsuccessful"    
-
+        return Tr_bp.reshape((len(Vtx_bp),4,4))
         # three term
         for t in range(1):
             for bp in range(1,len(Vtx_bp)):
@@ -779,6 +779,7 @@ def RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp):
     term_cons = np.zeros(len(bp_n))
     for i in range(len(bp_n)):
         term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
+        #term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3]+NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
     
     #return term_cons
     return sum(term_cons)
