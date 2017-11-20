@@ -421,36 +421,7 @@ class Application(tk.Frame):
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
-        Parts[1].MC.SaveToPlyExt("skeleton.ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
-
-        # projection in 2d space to draw the 3D model
-        rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
-        for bp in range(bpstart,nbBdyPart):
-            bou = bp
-            for i in range(4):
-                for j in range(4):
-                    PoseBP[bp][i][j] = Parts[bou].Tlg[i][j]
-            rendering = self.RGBD[0].DrawMesh(rendering,Parts[bou].MC.Vertices,Parts[bou].MC.Normales,PoseBP[bp], 1, self.color_tag)
-        # show segmentation result
-        img_label_temp =(self.RGBD[0].lImages[0][self.Index].astype(np.double)/7000*255).astype(np.uint8)
-        img_label = rendering.copy()
-        img_label[:,:,0] = img_label_temp.copy()
-        img_label[:,:,1] = img_label_temp.copy()
-        img_label[:,:,2] = img_label_temp.copy()
-        img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16),1:3] = 1000
-        # mix
-        result_stack = np.concatenate((rendering*0.0025+img_label*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label*0.005), axis=1)
-        print ("frame"+str(self.Index))
-        cv2.imshow("Tracking", result_stack)
-        cv2.waitKey(1)
-        if(self.Index<10):
-                imgstr = '00'+str(self.Index)
-        elif(self.Index<100):
-            imgstr = '0'+str(self.Index)
-        else:
-            imgstr = str(self.Index)
-        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/tracking/' + matfilename + '/track_'+ imgstr +'.png', result_stack*255)
-
+        
         #as prev RGBD
         newRGBD = self.RGBD
         
@@ -571,40 +542,7 @@ class Application(tk.Frame):
             # save with the number of the body part
             imgkStr = str(imgk)
             Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
-            Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
-            rendering_overlapping =np.zeros((self.Size[0], self.Size[1]), dtype = np.uint8)
-            # get overlapping region of each body part
-            overlapBdy = Stitcher.Stitch(nbBdyPart) 
-            for bp in range(1,nbBdyPart):
-                overlapBdy.getOverlapping(Parts, PoseBP, bp, newRGBD[0])
-                rendering_overlapping = self.RGBD[0].DrawMesh(rendering_overlapping,overlapBdy.StitchedVertices,overlapBdy.StitchedNormales,Id4, 1, 1)
-            Parts[bp].MC.SaveToPlyExt("OverlappingBody"+imgkStr+".ply",overlapBdy.StitchedVertices.shape[0],0,overlapBdy.StitchedVertices,[],0)
-
-            # projection in 2d space to draw the 3D model
-            # show segmentation result
-            img_label_temp =(self.RGBD[0].lImages[0][imgk].astype(np.double)/7000*255).astype(np.uint8)
-            img_label = rendering.copy()
-            img_label[:,:,0] = img_label_temp
-            img_label[:,:,1] = img_label_temp
-            img_label[:,:,2] = img_label_temp
-            img_label[self.pos2d[0,imgk][:,1].astype(np.int16), self.pos2d[0,imgk][:,0].astype(np.int16),1:3] = 1000
-            img_overlapping = rendering.copy()
-            img_overlapping[:,:,0] = 0
-            img_overlapping[:,:,1] = 0
-            img_overlapping[:,:,2] = rendering_overlapping*255
-            # mix
-            result_stack = np.concatenate((rendering*0.0025+img_label*0.0025+img_overlapping, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label*0.005), axis=1)
-            print ("frame"+imgkStr)
-            cv2.imshow("Tracking", result_stack)
-            cv2.waitKey(1)
-            if(imgk<10):
-                imgstr = '00'+str(imgk)
-            elif(imgk<100):
-                imgstr = '0'+str(imgk)
-            else:
-                imgstr = str(imgk)
-            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/tracking/' + matfilename + '/track_' + imgstr + '.png', result_stack*255)
-
+            
         TimeStart_Lapsed = time.time() - TimeStart
         print "total time: %f" %(TimeStart_Lapsed)
         #"""
