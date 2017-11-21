@@ -179,7 +179,53 @@ class My_MarchingCube():
             elapsed_time = time.time() - start_time3
             print "SaveToPly: %f" % (elapsed_time)
         
-                    
+    def SaveBBToPlyExt(self, name,Vertices,display = 0):
+        """
+        Function to record an bounding box mesh into a .ply file
+        Create file .ply with vertices and faces for vizualization in MeshLab
+        :param name: string, name of the file
+        :param Vertices: array 8*3,
+        :param display: int, 0 if you do not want to display the time
+        :return: none
+        """
+        if display != 0:
+            start_time3 = time.time()
+        path = '../meshes/'
+        f = open(path+name, 'wb')
+        
+        nb_vertices = 8
+        nb_faces = 12
+
+        # Write headers
+        f.write("ply\n")
+        f.write("format ascii 1.0\n")
+        f.write("comment ply file created by Diego Thomas\n")
+        f.write("element vertex %d \n" %(nb_vertices))
+        f.write("property float x\n")
+        f.write("property float y\n")
+        f.write("property float z\n")
+        f.write("element face %d \n" %(nb_faces))
+        f.write("property list uchar int vertex_indices\n")
+        f.write("end_header\n")
+        
+        # Write vertices
+        for i in range(nb_vertices):
+            f.write("%f %f %f \n" %(Vertices[i,0], Vertices[i,1], Vertices[i,2]))
+            
+        # Write the faces
+        for i in range(nb_faces):
+            f.write("3 0 1 4 \n 3 1 5 4 \n")
+            f.write("3 1 2 6 \n 3 1 6 5 \n")
+            f.write("3 2 3 7 \n 3 2 7 6 \n")
+            f.write("3 3 0 4 \n 3 3 4 7 \n")
+            f.write("3 4 5 6 \n 3 4 6 7 \n")
+            f.write("3 2 3 0 \n 3 2 0 1 \n")
+
+        f.close()
+
+        if display != 0:
+            elapsed_time = time.time() - start_time3
+            print "SaveToPly: %f" % (elapsed_time)                
 
     def DrawMesh(self, Pose, intrinsic, Size, canvas):
         '''

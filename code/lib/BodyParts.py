@@ -51,9 +51,10 @@ class BodyParts():
         PoseBP = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
 
         # Compute the dimension of the body part to create the volume
-        Xraw = int(round(LA.norm(self.RGBD.coordsGbl[bp][3] - self.RGBD.coordsGbl[bp][0]) / self.VoxSize)) + 1
-        Yraw = int(round(LA.norm(self.RGBD.coordsGbl[bp][1] - self.RGBD.coordsGbl[bp][0]) / self.VoxSize)) + 1
-        Zraw = int(round(LA.norm(self.RGBD.coordsGbl[bp][4] - self.RGBD.coordsGbl[bp][0]) / self.VoxSize)) + 1
+        wider = self.VoxSize*5
+        Xraw = int(round( (self.RGBD.BBsize[bp][0]+wider*2) / self.VoxSize)) + 1
+        Yraw = int(round( (self.RGBD.BBsize[bp][1]+wider*2) / self.VoxSize)) + 1
+        Zraw = int(round( (self.RGBD.BBsize[bp][2]+wider*2) / self.VoxSize)) + 1
 
         # Dimensions of body part volume
         X = max(Xraw, Zraw)

@@ -14,6 +14,7 @@ from PIL import Image, ImageTk
 import imp
 import scipy.io
 import time
+from skimage.draw import line_aa
 
 RGBD = imp.load_source('RGBD', './lib/RGBD.py')
 TrackManager = imp.load_source('TrackManager', './lib/tracking.py')
@@ -421,7 +422,10 @@ class Application(tk.Frame):
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
-        Parts[1].MC.SaveToPlyExt("skeleton.ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
+        #Parts[1].MC.SaveToPlyExt("skeleton.ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
+        # save the coordinate of the body part
+        for bp in range(bpstart, nbBdyPart):
+            Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],Id4,1))
 
         # projection in 2d space to draw the 3D model
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -438,10 +442,52 @@ class Application(tk.Frame):
         img_label[:,:,1] = img_label_temp.copy()
         img_label[:,:,2] = img_label_temp.copy()
         img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16),1:3] = 1000
+        # draw Boundingboxes
+        for i in range(1,len(self.RGBD[0].coordsGbl)):
+            # Get corners of OBB
+            pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],Id4)
+            # create lines of the boxes
+            for j in range(3):
+                rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                rendering[rr,cc, 0] = 100
+                rendering[rr,cc, 1] = 230
+                rendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[j+4][1],pt[j+4][0],pt[j+5][1],pt[j+5][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                rendering[rr,cc, 0] = 100
+                rendering[rr,cc, 1] = 230
+                rendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+4][1],pt[j+4][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                rendering[rr,cc, 0] = 100
+                rendering[rr,cc, 1] = 230
+                rendering[rr,cc, 2] = 250
+            rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[0][1],pt[0][0])
+            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+            rendering[rr,cc, 0] = 100
+            rendering[rr,cc, 1] = 230
+            rendering[rr,cc, 2] = 250
+            rr,cc,val = line_aa(pt[7][1],pt[7][0],pt[4][1],pt[4][0])
+            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+            rendering[rr,cc, 0] = 100
+            rendering[rr,cc, 1] = 230
+            rendering[rr,cc, 2] = 250
+            rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[7][1],pt[7][0])
+            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+            rendering[rr,cc, 0] = 100
+            rendering[rr,cc, 1] = 230
+            rendering[rr,cc, 2] = 250
         # mix
         result_stack = np.concatenate((rendering*0.0025+img_label*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label*0.005), axis=1)
         print ("frame"+str(self.Index))
-        cv2.imshow("Tracking", result_stack)
+        cv2.imshow("BB", result_stack)
         cv2.waitKey(1)
         if(self.Index<10):
                 imgstr = '00'+str(self.Index)
@@ -449,7 +495,7 @@ class Application(tk.Frame):
             imgstr = '0'+str(self.Index)
         else:
             imgstr = str(self.Index)
-        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/tracking/' + matfilename + '/track_'+ imgstr +'.png', result_stack*255)
+        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/bb_'+ imgstr +'.png', result_stack*255)
 
         #as prev RGBD
         newRGBD = self.RGBD
@@ -540,12 +586,12 @@ class Application(tk.Frame):
                 rendering = self.RGBD[0].DrawMesh(rendering,Parts[bp].MC.Vertices,Parts[bp].MC.Normales,PoseBP[bp], 1, self.color_tag)
 
                 # TSDF Fusion of the body part
-                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP[bp])
+                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP[bp])
 
                 # Create Mesh
-                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
+                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
@@ -571,7 +617,7 @@ class Application(tk.Frame):
             # save with the number of the body part
             imgkStr = str(imgk)
             Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
-            Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
+            #Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
             rendering_overlapping =np.zeros((self.Size[0], self.Size[1]), dtype = np.uint8)
             # get overlapping region of each body part
             overlapBdy = Stitcher.Stitch(nbBdyPart) 
@@ -579,6 +625,10 @@ class Application(tk.Frame):
                 overlapBdy.getOverlapping(Parts, PoseBP, bp, newRGBD[0])
                 rendering_overlapping = self.RGBD[0].DrawMesh(rendering_overlapping,overlapBdy.StitchedVertices,overlapBdy.StitchedNormales,Id4, 1, 1)
             Parts[bp].MC.SaveToPlyExt("OverlappingBody"+imgkStr+".ply",overlapBdy.StitchedVertices.shape[0],0,overlapBdy.StitchedVertices,[],0)
+             # save the coordinate of the body part
+            for bp in range(bpstart, nbBdyPart):
+                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],T_Pose[bp],1))
+
 
             # projection in 2d space to draw the 3D model
             # show segmentation result
@@ -592,10 +642,52 @@ class Application(tk.Frame):
             img_overlapping[:,:,0] = 0
             img_overlapping[:,:,1] = 0
             img_overlapping[:,:,2] = rendering_overlapping*255
+            # draw Boundingboxes
+            for i in range(1,len(self.RGBD[0].coordsGbl)):
+                # Get corners of OBB
+                pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],T_Pose[i])
+                # create lines of the boxes
+                for j in range(3):
+                    rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    rendering[rr,cc, 0] = 100
+                    rendering[rr,cc, 1] = 230
+                    rendering[rr,cc, 2] = 250
+                    rr,cc,val = line_aa(pt[j+4][1],pt[j+4][0],pt[j+5][1],pt[j+5][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    rendering[rr,cc, 0] = 100
+                    rendering[rr,cc, 1] = 230
+                    rendering[rr,cc, 2] = 250
+                    rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+4][1],pt[j+4][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    rendering[rr,cc, 0] = 100
+                    rendering[rr,cc, 1] = 230
+                    rendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[0][1],pt[0][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                rendering[rr,cc, 0] = 100
+                rendering[rr,cc, 1] = 230
+                rendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[7][1],pt[7][0],pt[4][1],pt[4][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                rendering[rr,cc, 0] = 100
+                rendering[rr,cc, 1] = 230
+                rendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[7][1],pt[7][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                rendering[rr,cc, 0] = 100
+                rendering[rr,cc, 1] = 230
+                rendering[rr,cc, 2] = 250
             # mix
             result_stack = np.concatenate((rendering*0.0025+img_label*0.0025+img_overlapping, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label*0.005), axis=1)
             print ("frame"+imgkStr)
-            cv2.imshow("Tracking", result_stack)
+            cv2.imshow("BB", result_stack)
             cv2.waitKey(1)
             if(imgk<10):
                 imgstr = '00'+str(imgk)
@@ -603,7 +695,7 @@ class Application(tk.Frame):
                 imgstr = '0'+str(imgk)
             else:
                 imgstr = str(imgk)
-            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/tracking/' + matfilename + '/track_' + imgstr + '.png', result_stack*255)
+            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/bb_' + imgstr + '.png', result_stack*255)
 
         TimeStart_Lapsed = time.time() - TimeStart
         print "total time: %f" %(TimeStart_Lapsed)

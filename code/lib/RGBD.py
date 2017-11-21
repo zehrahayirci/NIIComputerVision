@@ -727,6 +727,8 @@ class RGBD():
         self.coordsGbl.append([0.,0.,0.])
         self.mask=[]
         self.mask.append([0.,0.,0.])
+        self.BBsize = []
+        self.BBsize.append([0.,0.,0.])
         for i in range(1,self.bdyPart.shape[0]+1):
             self.mask.append( (self.labels == i) )
             # compute center of 3D
@@ -759,7 +761,7 @@ class RGBD():
         '''     
         # Adding a space so that the bounding boxes are wider
         VoxSize = 0.005
-        wider = 5*VoxSize
+        wider = 5*VoxSize*0
         # extremes planes of the bodies
         minX = np.min(self.TVtxBB[i][:,0]) - wider
         maxX = np.max(self.TVtxBB[i][:,0]) + wider
@@ -786,7 +788,9 @@ class RGBD():
         self.coordsGbl.append( self.pca[i].inverse_transform(self.coordsL[i]))
         #print "coordsGbl[%d]" %(i)
         #print self.coordsGbl[i]
-            
+        
+        # save the boundingboxes size
+        self.BBsize.append([LA.norm(self.coordsGbl[i][3] - self.coordsGbl[i][0]), LA.norm(self.coordsGbl[i][1] - self.coordsGbl[i][0]), LA.norm(self.coordsGbl[i][4] - self.coordsGbl[i][0])])
 
     def GetProjPts2D(self, vects3D, Pose, s=1) :
         """
