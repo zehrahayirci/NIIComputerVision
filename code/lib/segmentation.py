@@ -474,7 +474,7 @@ class Segmentation(object):
         pt4D = np.array([intersection_elbow[0],intersection_elbow[1],intersection_wrist[1],intersection_wrist[0]])
         # list of the 4 points defining the corners the forearm permuted
         pt4D_bis = np.array([intersection_wrist[0],intersection_elbow[0],intersection_elbow[1],intersection_wrist[1]])
-        if side != 0 :
+        if side == 0 :
             self.foreArmPtsR = pt4D
         else:
             self.foreArmPtsL = pt4D

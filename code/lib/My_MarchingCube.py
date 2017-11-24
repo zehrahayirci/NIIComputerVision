@@ -179,12 +179,13 @@ class My_MarchingCube():
             elapsed_time = time.time() - start_time3
             print "SaveToPly: %f" % (elapsed_time)
         
-    def SaveBBToPlyExt(self, name,Vertices,display = 0):
+    def SaveBBToPlyExt(self, name,Vertices,bp, display = 0):
         """
         Function to record an bounding box mesh into a .ply file
         Create file .ply with vertices and faces for vizualization in MeshLab
         :param name: string, name of the file
         :param Vertices: array 8*3,
+        :param bp: index of body index
         :param display: int, 0 if you do not want to display the time
         :return: none
         """
@@ -195,6 +196,9 @@ class My_MarchingCube():
         
         nb_vertices = 8
         nb_faces = 12
+        if bp==10:
+            nb_faces = 32
+            nb_vertices = 18
 
         # Write headers
         f.write("ply\n")
@@ -213,13 +217,30 @@ class My_MarchingCube():
             f.write("%f %f %f \n" %(Vertices[i,0], Vertices[i,1], Vertices[i,2]))
             
         # Write the faces
-        for i in range(nb_faces):
+        if nb_faces==12:
             f.write("3 0 1 4 \n 3 1 5 4 \n")
             f.write("3 1 2 6 \n 3 1 6 5 \n")
             f.write("3 2 3 7 \n 3 2 7 6 \n")
             f.write("3 3 0 4 \n 3 3 4 7 \n")
             f.write("3 4 5 6 \n 3 4 6 7 \n")
-            f.write("3 2 3 0 \n 3 2 0 1 \n")
+            f.write("3 3 2 0 \n 3 0 2 1 \n")
+        else:
+            f.write("3 1 4 2 \n 3 2 4 3 \n")
+            f.write("3 1 5 4 \n 3 1 0 5 \n")
+            f.write("3 0 8 5 \n 3 6 5 8 \n")
+            f.write("3 8 7 6 \n 3 15 16 17 \n")
+            f.write("3 15 17 14 \n 3 17 9 14 \n")
+            f.write("3 9 10 14 \n 3 14 10 13 \n")
+            f.write("3 10 11 13 \n 3 11 12 13 \n")
+            f.write("3 11 1 2 \n 3 11 10 1 \n")
+            f.write("3 10 0 1 \n 3 10 9 0 \n")
+            f.write("3 9 8 0 \n 3 9 17 8 \n")
+            f.write("3 17 7 8 \n 3 17 16 7 \n")
+            f.write("3 16 6 7 \n 3 16 15 6 \n")
+            f.write("3 15 5 6 \n 3 15 14 5 \n")
+            f.write("3 14 4 5 \n 3 14 13 4 \n")
+            f.write("3 13 3 4 \n 3 13 12 3 \n")
+            f.write("3 12 2 3 \n 3 12 11 2 \n")
 
         f.close()
 

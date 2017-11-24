@@ -344,7 +344,7 @@ class Application(tk.Frame):
         
         # number of images in the sequence. Start and End
         self.Index = 191
-        nunImg = 220
+        nunImg = 193
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -370,7 +370,7 @@ class Application(tk.Frame):
 
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
-        self.RGBD[0].ReshapeBB()
+        self.RGBD[0].BuildBB()
 
         '''
         The first image is process differently from the other since it does not have any previous value.
@@ -428,7 +428,8 @@ class Application(tk.Frame):
         Parts[1].MC.SaveToPlyExt("testtttt.ply",44,0,self.RGBD[0].test,[])
         # save the coordinate of the body part
         for bp in range(bpstart, nbBdyPart):
-            Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],Id4,1))
+            Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],Id4,1), bp)
+            Parts[1].MC.SaveBBToPlyExt("BBL_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsL[bp],Id4,1), bp)
 
         # projection in 2d space to draw the 3D model
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -638,7 +639,7 @@ class Application(tk.Frame):
             Parts[bp].MC.SaveToPlyExt("OverlappingBody"+imgkStr+".ply",overlapBdy.StitchedVertices.shape[0],0,overlapBdy.StitchedVertices,[],0)
              # save the coordinate of the body part
             for bp in range(bpstart, nbBdyPart):
-                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],T_Pose[bp],1))
+                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],T_Pose[bp], 1), bp)
 
 
             # projection in 2d space to draw the 3D model
