@@ -370,6 +370,7 @@ class Application(tk.Frame):
 
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
+        self.RGBD[0].ReshapeBB()
 
         '''
         The first image is process differently from the other since it does not have any previous value.
@@ -419,16 +420,19 @@ class Application(tk.Frame):
                 StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces,PoseBP[bp])
             # save vertex in global of each body part
             globalVtx_bp.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp],1))
+            Parts[1].MC.SaveToPlyExt("GBody"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp],1),Parts[bp].MC.Faces)
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
         #Parts[1].MC.SaveToPlyExt("skeleton.ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
+        Parts[1].MC.SaveToPlyExt("testtttt.ply",44,0,self.RGBD[0].test,[])
         # save the coordinate of the body part
         for bp in range(bpstart, nbBdyPart):
             Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],Id4,1))
 
         # projection in 2d space to draw the 3D model
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         for bp in range(bpstart,nbBdyPart):
             bou = bp
             for i in range(4):
@@ -441,51 +445,57 @@ class Application(tk.Frame):
         img_label[:,:,0] = img_label_temp.copy()
         img_label[:,:,1] = img_label_temp.copy()
         img_label[:,:,2] = img_label_temp.copy()
-        img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16),1:3] = 1000
+        img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16),0:3] = 1000
         # draw Boundingboxes
         for i in range(1,len(self.RGBD[0].coordsGbl)):
             # Get corners of OBB
             pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],Id4)
+            # create point of the boxes
+            bbrendering[pt[:,1], pt[:,0],0] = 100
+            bbrendering[pt[:,1], pt[:,0],1] = 230
+            bbrendering[pt[:,1], pt[:,0],2] = 230
+            
             # create lines of the boxes
             for j in range(3):
                 rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                rendering[rr,cc, 0] = 100
-                rendering[rr,cc, 1] = 230
-                rendering[rr,cc, 2] = 250
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
                 rr,cc,val = line_aa(pt[j+4][1],pt[j+4][0],pt[j+5][1],pt[j+5][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                rendering[rr,cc, 0] = 100
-                rendering[rr,cc, 1] = 230
-                rendering[rr,cc, 2] = 250
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
                 rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+4][1],pt[j+4][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                rendering[rr,cc, 0] = 100
-                rendering[rr,cc, 1] = 230
-                rendering[rr,cc, 2] = 250
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
             rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[0][1],pt[0][0])
             rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
             cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            rendering[rr,cc, 0] = 100
-            rendering[rr,cc, 1] = 230
-            rendering[rr,cc, 2] = 250
+            bbrendering[rr,cc, 0] = 100
+            bbrendering[rr,cc, 1] = 230
+            bbrendering[rr,cc, 2] = 250
             rr,cc,val = line_aa(pt[7][1],pt[7][0],pt[4][1],pt[4][0])
             rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
             cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            rendering[rr,cc, 0] = 100
-            rendering[rr,cc, 1] = 230
-            rendering[rr,cc, 2] = 250
+            bbrendering[rr,cc, 0] = 100
+            bbrendering[rr,cc, 1] = 230
+            bbrendering[rr,cc, 2] = 250
             rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[7][1],pt[7][0])
             rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
             cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            rendering[rr,cc, 0] = 100
-            rendering[rr,cc, 1] = 230
-            rendering[rr,cc, 2] = 250
+            bbrendering[rr,cc, 0] = 100
+            bbrendering[rr,cc, 1] = 230
+            bbrendering[rr,cc, 2] = 250
+            
         # mix
-        result_stack = np.concatenate((rendering*0.0025+img_label*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label*0.005), axis=1)
+        result_stack = np.concatenate((rendering*0.0025+img_label*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_label*0.0020), axis=1)
         print ("frame"+str(self.Index))
         cv2.imshow("BB", result_stack)
         cv2.waitKey(1)
@@ -561,6 +571,7 @@ class Application(tk.Frame):
             
             # projection in 2d space to draw the 3D model
             rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
           
             # Updating mesh of each body part
             for bp in range(1,nbBdyPart):
@@ -651,41 +662,41 @@ class Application(tk.Frame):
                     rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
                     rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                     cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                    rendering[rr,cc, 0] = 100
-                    rendering[rr,cc, 1] = 230
-                    rendering[rr,cc, 2] = 250
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
                     rr,cc,val = line_aa(pt[j+4][1],pt[j+4][0],pt[j+5][1],pt[j+5][0])
                     rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                     cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                    rendering[rr,cc, 0] = 100
-                    rendering[rr,cc, 1] = 230
-                    rendering[rr,cc, 2] = 250
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
                     rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+4][1],pt[j+4][0])
                     rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                     cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                    rendering[rr,cc, 0] = 100
-                    rendering[rr,cc, 1] = 230
-                    rendering[rr,cc, 2] = 250
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
                 rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[0][1],pt[0][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                rendering[rr,cc, 0] = 100
-                rendering[rr,cc, 1] = 230
-                rendering[rr,cc, 2] = 250
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
                 rr,cc,val = line_aa(pt[7][1],pt[7][0],pt[4][1],pt[4][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                rendering[rr,cc, 0] = 100
-                rendering[rr,cc, 1] = 230
-                rendering[rr,cc, 2] = 250
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
                 rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[7][1],pt[7][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                rendering[rr,cc, 0] = 100
-                rendering[rr,cc, 1] = 230
-                rendering[rr,cc, 2] = 250
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
             # mix
-            result_stack = np.concatenate((rendering*0.0025+img_label*0.0025+img_overlapping, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label*0.005), axis=1)
+            result_stack = np.concatenate((rendering*0.0025+img_label*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_label*0.0020+img_overlapping), axis=1)
             print ("frame"+imgkStr)
             cv2.imshow("BB", result_stack)
             cv2.waitKey(1)

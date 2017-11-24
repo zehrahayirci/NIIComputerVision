@@ -14,7 +14,7 @@ import scipy.ndimage.measurements as spm
 import pdb
 from skimage import img_as_ubyte
 from sklearn.decomposition import PCA
-
+import copy
 
 segm = imp.load_source('segmentation', './lib/segmentation.py')
 General = imp.load_source('General', './lib/General.py')
@@ -791,6 +791,238 @@ class RGBD():
         
         # save the boundingboxes size
         self.BBsize.append([LA.norm(self.coordsGbl[i][3] - self.coordsGbl[i][0]), LA.norm(self.coordsGbl[i][1] - self.coordsGbl[i][0]), LA.norm(self.coordsGbl[i][4] - self.coordsGbl[i][0])])
+
+    def ReshapeBB(self):
+        """
+        Reshape bounding boxes to let no overlapping bounding boxes
+        :return: none
+        """
+        # settings
+        interLineList = copy.deepcopy([[], \
+        [[self.segm.foreArmPtsR[0], self.segm.foreArmPtsR[1]], [self.segm.foreArmPtsR[2], self.segm.foreArmPtsR[3]]], \
+        [[self.segm.foreArmPtsR[0], self.segm.foreArmPtsR[1]], [self.segm.upperArmPtsL[1], self.segm.upperArmPtsL[2]]], \
+        [[self.segm.foreArmPtsL[0], self.segm.foreArmPtsL[1]], [self.segm.foreArmPtsL[2], self.segm.foreArmPtsL[3]]], \
+        [[self.segm.foreArmPtsL[0], self.segm.foreArmPtsL[1]], [self.segm.upperArmPtsR[1], self.segm.upperArmPtsR[2]]], \
+        [[self.segm.thighPtsR[0], self.segm.thighPtsR[1]], [self.segm.thighPtsR[2], self.segm.thighPtsR[3]]], \
+        [[self.segm.calfPtsR[0], self.segm.calfPtsR[1]], [self.segm.calfPtsR[2], self.segm.calfPtsR[3]]],
+        [[self.segm.thighPtsL[0], self.segm.thighPtsL[1]], [self.segm.thighPtsL[2], self.segm.thighPtsL[3]]], \
+        [[self.segm.calfPtsL[0], self.segm.calfPtsL[1]], [self.segm.calfPtsL[2], self.segm.calfPtsL[3]]], \
+        [[self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy()]], \
+        [[self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy()]], \
+        [[self.segm.foreArmPtsL[2], self.segm.foreArmPtsL[3]]], \
+        [[self.segm.foreArmPtsR[2], self.segm.foreArmPtsR[3]]], \
+        [[self.segm.calfPtsL[0], self.segm.calfPtsL[1]]], \
+        [[self.segm.calfPtsR[0], self.segm.calfPtsR[1]]], \
+        ])
+        labelList = [[],[1, 12], [1, 2], [3, 11], [3, 4], [10, 6], [6, 6], [10, 8], [8, 8], [9], [9], [11], [12], [8], [6]]
+        neighborList = [[1,3,4], [0,2,5], [1,3,6], [0,2,7], [0,5,7], [1,4,6], [2,5,7], [3,4,6]]
+
+        self.test = np.zeros((44,3))
+        t=0
+        
+
+        #2D 2 3D
+        for i in range(1, len(interLineList)):
+            for j in range(len(interLineList[i])):
+                depth = sum(sum(self.depth_image*(self.labels==labelList[i][j])))/sum(sum(self.labels==labelList[i][j]))
+
+                for k in range(len(interLineList[i][j])):
+                    # point = [x,y]
+                    # move positions from cropped box to original size
+                    interLineList[i][j][k] = map(float, interLineList[i][j][k])
+                    interLineList[i][j][k][0] = float(interLineList[i][j][k][0] + self.transCrop[0])
+                    interLineList[i][j][k][1] = float(interLineList[i][j][k][1] + self.transCrop[1])
+                    # project to 3D coordinate
+                    interLineList[i][j][k][0] = ( interLineList[i][j][k][0] - self.intrinsic[0,2])/self.intrinsic[0,0]*depth
+                    interLineList[i][j][k][1] = ( interLineList[i][j][k][1] - self.intrinsic[1,2])/self.intrinsic[1,1]*depth                   
+                    interLineList[i][j][k].append(depth)
+                    self.test[t][0] = interLineList[i][j][k][0]
+                    self.test[t][1] = interLineList[i][j][k][1]
+                    self.test[t][2] = depth
+                    t+=1
+
+        # for each body part
+        for bp in range(1,len(interLineList)):
+            interLines = interLineList[bp]
+            # for each line of one body part
+            for i in range(len(interLines)):
+                interLine = interLines[i]
+
+                # special cases
+                if( i==0 and (bp==5 or bp==7)):
+                    depth = sum(sum(self.depth_image*(self.labels==10)))/sum(sum(self.labels==10))
+                    pos0 = map(float, self.segm.pos0)
+                    pos0[0] = pos0[0]+self.transCrop[0]
+                    pos0[1] = pos0[1]+self.transCrop[1]
+                    pos0[0] = ( pos0[0] - self.intrinsic[0,2])/self.intrinsic[0,0]*depth
+                    pos0[1] = ( pos0[1] - self.intrinsic[1,2])/self.intrinsic[1,1]*depth
+                    pos0 = [pos0[0], pos0[1], depth]
+                    dis = self.coordsGbl[bp] - pos0
+                    dis = np.linalg.norm(dis, axis=1)
+                    dis_index = np.argsort(dis)
+                    self.coordsGbl[bp][dis_index[0]][0:2] = interLine[0][0:2]
+                    self.coordsGbl[bp][dis_index[1]][0:2] = interLine[0][0:2]
+                if bp==13 or bp==14:
+                    for i in range(8):
+                        if((interLine[0][1]/2+interLine[1][1]/2)-self.coordsGbl[bp][i][1]>0.0):
+                            self.coordsGbl[bp][i][1] = interLine[0][1]/2+interLine[1][1]/2
+                if( i==1 and bp==5):
+                    dis = self.coordsGbl[bp] - interLineList[7][1][1]
+                    dis = np.linalg.norm(dis, axis=1)
+                    dis_index = np.argsort(dis)
+                    self.coordsGbl[bp][dis_index[0]][0:2] = interLine[1][0:2]
+                    self.coordsGbl[bp][dis_index[1]][0:2] = interLine[1][0:2]
+                if( i==1 and bp==7):
+                    dis = self.coordsGbl[bp] - interLineList[5][1][1]
+                    dis = np.linalg.norm(dis, axis=1)
+                    dis_index = np.argsort(dis)
+                    self.coordsGbl[bp][dis_index[0]][0:2] = interLine[1][0:2]
+                    self.coordsGbl[bp][dis_index[1]][0:2] = interLine[1][0:2]
+                if( i==1 and (bp==2 or bp==4)):
+                    if bp==2:
+                        peakshoulder = interLineList[9][0][1]
+                    else:
+                        peakshoulder = interLineList[9][0][0]
+
+                    dis = self.coordsGbl[bp] - peakshoulder
+                    dis = np.linalg.norm(dis, axis=1)
+                    dis_index = np.argsort(dis)
+                    '''
+                    a = self.labels>0
+                    a = a*0.5
+                    b = self.GetProjPts2D_optimize(self.coordsGbl[bp][dis_index[0:2]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                    a[b[:,1], b[:,0]] = 1.0
+                    cv2.imshow(" ", a)
+                    cv2.waitKey()
+                    b = self.GetProjPts2D_optimize(self.coordsGbl[bp][dis_index[2:4]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                    a[b[:,1], b[:,0]] = 1.0
+                    cv2.imshow(" ", a)
+                    cv2.waitKey()
+                    '''
+                    dis = []
+                    for i in range(4):
+                        dis.append(np.linalg.norm(self.coordsGbl[bp][dis_index[i]][0:2]-interLine[1][0:2]))
+                    dis2_index = np.argsort(dis)
+                    self.coordsGbl[bp][dis_index[dis2_index[0]]][0:2] = interLine[1][0:2]
+                    self.coordsGbl[bp][dis_index[dis2_index[1]]][0:2] = interLine[1][0:2]
+                    self.coordsGbl[bp][dis_index[dis2_index[2]]][0:2] = interLine[0][0:2]
+                    self.coordsGbl[bp][dis_index[dis2_index[3]]][0:2] = interLine[0][0:2]
+                    '''
+                    a = self.labels>0
+                    a = a*0.5
+                    b = self.GetProjPts2D_optimize([self.coordsGbl[bp][dis_index[0]], self.coordsGbl[bp][dis_index[1]]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                    a[b[:,1], b[:,0]] = 1.0
+                    cv2.imshow("", a)
+                    cv2.waitKey()
+                    b = self.GetProjPts2D_optimize([self.coordsGbl[bp][dis_index[2]], self.coordsGbl[bp][dis_index[3]]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                    a[b[:,1], b[:,0]] = 1.0
+                    cv2.imshow("", a)
+                    cv2.waitKey()
+                    '''
+                if bp==9:
+                    for i in range(8):
+                        if(self.coordsGbl[bp][i][1]>(interLine[0][1]/2+interLine[1][1]/2)):
+                            self.coordsGbl[bp][i][1] = interLine[0][1]/2+interLine[1][1]/2
+
+                # reshape the body part
+                #find the plane
+                planeNor = np.cross(np.array((interLine[1][0]-interLine[0][0], interLine[1][1]-interLine[0][1], 0)), np.array([0,0,1]))
+                #print np.linalg.norm(planeNor)
+                planeNor = planeNor/np.linalg.norm(planeNor)
+                planeF = np.hstack((planeNor, -1*np.dot(planeNor, np.array((interLine[0][0], interLine[0][1], 0)) ) ) )
+                #get the distance of global coordinate to plane
+                points_BB = self.coordsGbl[bp]
+                dis = np.abs(np.dot(points_BB, planeF[0:3].transpose())+planeF[3])
+                #get four min. dis index
+                dis_index = np.argsort(dis)
+
+                #special case
+                if(bp==9):
+                    pointM = [interLine[0][0]/2+interLine[1][0]/2, interLine[0][1]/2+interLine[1][1]/2, interLine[0][2]/2+interLine[1][2]/2]
+                    dis = np.linalg.norm(points_BB-pointM, axis = 1)
+                    dis_index = np.argsort(dis)
+                if bp==13 or bp==14:
+                    points = np.array(self.coordsGbl[bp])
+                    depthorder = np.argsort(points[:,2])
+                    Xorder = np.argsort(points[depthorder[0:4],0])
+                    Yorder = np.argsort(points[depthorder[Xorder[0:2]],1])
+                    dis_index = [depthorder[Xorder[Yorder[0]]]]
+                    Yorder = np.argsort(points[depthorder[Xorder[2:4]],1])
+                    dis_index.append(depthorder[Xorder[Yorder[0]]+2])
+                    for i in range(2):
+                        depth = []
+                        for neighbor in neighborList[dis_index[i]]:
+                            depth.append(abs(self.coordsGbl[bp][dis_index[i]][2]-self.coordsGbl[bp][neighbor][2]))
+                        depthMaxIndex = depth.index(max(depth))
+                        dis_index.append(neighborList[dis_index[i]][depthMaxIndex])
+                # check
+                v1 = self.coordsGbl[bp][dis_index[0]]-self.coordsGbl[bp][dis_index[1]]
+                v2 = self.coordsGbl[bp][dis_index[1]]-self.coordsGbl[bp][dis_index[2]]
+                surface = np.cross(v1, v2)
+                surface = surface/np.linalg.norm(surface)
+                if(abs(surface[2]>0.65)):
+                    dis_index = [dis_index[0], dis_index[1], dis_index[4], dis_index[5]]
+                '''
+                a = self.labels>0
+                a = a*0.5
+                b = self.GetProjPts2D_optimize(self.coordsGbl[bp], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                a[b[:,1], b[:,0]] = 1.0
+                cv2.imshow("before", a)
+
+                
+                a = self.labels>0
+                a = a*0.5
+                b = self.GetProjPts2D_optimize(self.coordsGbl[bp][dis_index[0:4]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                a[b[:,1], b[:,0]] = 1.0
+                cv2.imshow("QQ", a)
+                '''
+                for i in range(4):
+                    # follow the line to the plane
+                    for neighbor in neighborList[dis_index[i]]:
+                        if (neighbor in dis_index[0:4])==False:
+
+                            if np.dot(self.coordsGbl[bp][neighbor], planeF[0:3].transpose())+planeF[3]>=0:
+                                pointP = self.coordsGbl[bp][neighbor]
+                                pointN = self.coordsGbl[bp][dis_index[i]]
+                            else:
+                                pointP = self.coordsGbl[bp][dis_index[i]]
+                                pointN = self.coordsGbl[bp][neighbor]
+                            for loop in range(10):
+                                pointM = pointP/2+pointN/2
+                                if np.dot(pointM, planeF[0:3].transpose())+planeF[3]>=0:
+                                    pointP = pointM
+                                else:
+                                    pointN = pointM
+                            break
+                    pointM = self.coordsGbl[bp][dis_index[i]]
+                    self.coordsGbl[bp][dis_index[i]] = pointM
+                    
+                    # project to the plane
+                    points2ori = pointM-np.array((interLine[0][0],interLine[0][1], interLine[0][2]))
+                    disNor = np.dot(points2ori, planeNor.transpose())
+                    self.coordsGbl[bp][dis_index[i]] = pointM - disNor*planeNor
+                '''
+                a = self.labels>0
+                a = a*0.5
+                b = self.GetProjPts2D_optimize(self.coordsGbl[bp], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                a[b[:,1], b[:,0]] = 1.0
+                cv2.imshow("after", a)
+
+                a = self.labels>0
+                a = a*0.5
+                b = self.GetProjPts2D_optimize([interLine[0][0], interLine[0][1], interLine[0][2]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                a[b[:,1], b[:,0]] = 1.0
+                b = self.GetProjPts2D_optimize([interLine[1][0], interLine[1][1], interLine[0][2]], np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32))
+                a[b[:,1], b[:,0]] = 1.0
+                cv2.imshow("line", a)
+                cv2.waitKey()  
+                '''
+        # update local coordinate
+        self.coordsL = []
+        self.coordsL.append([0.,0.,0.])
+        for bp in range(1,len(interLineList)):
+            self.coordsL.append(self.pca[bp].transform(self.coordsGbl[bp]))
+        
 
     def GetProjPts2D(self, vects3D, Pose, s=1) :
         """
