@@ -344,7 +344,7 @@ class Application(tk.Frame):
         
         # number of images in the sequence. Start and End
         self.Index = 191
-        nunImg = 193
+        nunImg = 192
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -455,45 +455,77 @@ class Application(tk.Frame):
             bbrendering[pt[:,1], pt[:,0],0] = 100
             bbrendering[pt[:,1], pt[:,0],1] = 230
             bbrendering[pt[:,1], pt[:,0],2] = 230
-            
-            # create lines of the boxes
-            for j in range(3):
-                rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
+            if i==10:
+                for j in range(7):
+                    rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
+                    rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+9][1],pt[j+9][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
+                    rr,cc,val = line_aa(pt[j+9][1],pt[j+9][0],pt[j+10][1],pt[j+10][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[0][1],pt[0][0],pt[8][1],pt[8][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
                 bbrendering[rr,cc, 0] = 100
                 bbrendering[rr,cc, 1] = 230
                 bbrendering[rr,cc, 2] = 250
-                rr,cc,val = line_aa(pt[j+4][1],pt[j+4][0],pt[j+5][1],pt[j+5][0])
+                rr,cc,val = line_aa(pt[9][1],pt[9][0],pt[17][1],pt[17][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
                 bbrendering[rr,cc, 0] = 100
                 bbrendering[rr,cc, 1] = 230
                 bbrendering[rr,cc, 2] = 250
-                rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+4][1],pt[j+4][0])
+            else:
+                # create lines of the boxes
+                for j in range(3):
+                    rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+1][1],pt[j+1][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
+                    rr,cc,val = line_aa(pt[j+4][1],pt[j+4][0],pt[j+5][1],pt[j+5][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
+                    rr,cc,val = line_aa(pt[j][1],pt[j][0],pt[j+4][1],pt[j+4][0])
+                    rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                    cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                    bbrendering[rr,cc, 0] = 100
+                    bbrendering[rr,cc, 1] = 230
+                    bbrendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[0][1],pt[0][0])
                 rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
                 cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
                 bbrendering[rr,cc, 0] = 100
                 bbrendering[rr,cc, 1] = 230
                 bbrendering[rr,cc, 2] = 250
-            rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[0][1],pt[0][0])
-            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
-            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            bbrendering[rr,cc, 0] = 100
-            bbrendering[rr,cc, 1] = 230
-            bbrendering[rr,cc, 2] = 250
-            rr,cc,val = line_aa(pt[7][1],pt[7][0],pt[4][1],pt[4][0])
-            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
-            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            bbrendering[rr,cc, 0] = 100
-            bbrendering[rr,cc, 1] = 230
-            bbrendering[rr,cc, 2] = 250
-            rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[7][1],pt[7][0])
-            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
-            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            bbrendering[rr,cc, 0] = 100
-            bbrendering[rr,cc, 1] = 230
-            bbrendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[7][1],pt[7][0],pt[4][1],pt[4][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
+                rr,cc,val = line_aa(pt[3][1],pt[3][0],pt[7][1],pt[7][0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                bbrendering[rr,cc, 0] = 100
+                bbrendering[rr,cc, 1] = 230
+                bbrendering[rr,cc, 2] = 250
             
         # mix
         result_stack = np.concatenate((rendering*0.0025+img_label*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_label*0.0020), axis=1)
