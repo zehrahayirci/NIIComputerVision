@@ -474,7 +474,7 @@ class Segmentation(object):
         pt4D = np.array([intersection_elbow[0],intersection_elbow[1],intersection_wrist[1],intersection_wrist[0]])
         # list of the 4 points defining the corners the forearm permuted
         pt4D_bis = np.array([intersection_wrist[0],intersection_elbow[0],intersection_elbow[1],intersection_wrist[1]])
-        if side != 0 :
+        if side == 0 :
             self.foreArmPtsR = pt4D
         else:
             self.foreArmPtsL = pt4D
@@ -534,7 +534,7 @@ class Segmentation(object):
         c_pen = -(a_pen*pos2D[shoulder,0]+b_pen*pos2D[shoulder,1])
 
 
-        intersection_shoulder =self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[shoulder])
+        intersection_shoulder = self.inferedPoint(A,a_pen,b_pen,c_pen,pos2D[shoulder])
         vect65 = pos2D[shoulder]-pos2D[elbow]
         
         #
@@ -598,10 +598,10 @@ class Segmentation(object):
         # constraint on peakArmpit
         if side == 0 and peakArmpit[0]>intersection_elbow[0][0]:
             print "meet the constrains on peakArmpitR"
-            peakArmpit = intersection_elbow[0]
+            peakArmpit = [intersection_elbow[0][0]/2 + intersection_shoulder[1][0]/2-2, intersection_elbow[0][1]/2 + intersection_shoulder[1][1]/2]
         elif side==1 and peakArmpit[0]<intersection_elbow[1][0]:
             print "meet the constrains on peakArmpitL"
-            peakArmpit = intersection_elbow[1]
+            peakArmpit = [intersection_elbow[1][0]/2 + intersection_shoulder[0][0]/2+2, intersection_elbow[1][1]/2 + intersection_shoulder[0][1]/2]
         
         # check if intersection is on the head
         if peakshoulder[1]<pos2D[2][1]:
@@ -617,11 +617,13 @@ class Segmentation(object):
 
         # create the upperarm polygon out the five point defining it
         if side != 0 :
-            ptA = np.stack((intersection_elbow[0],intersection_shoulder[0],peakshoulder,peakArmpit,intersection_elbow[1]))
+            #ptA = np.stack((intersection_elbow[0],intersection_shoulder[0],peakshoulder,peakArmpit,intersection_elbow[1]))
+            ptA = np.stack((intersection_elbow[0],intersection_shoulder[0],peakArmpit,intersection_elbow[1]))
             self.upperArmPtsL = ptA
             self.peakshoulderL = peakshoulder
         else:
-            ptA = np.stack((intersection_elbow[1],intersection_shoulder[1],peakshoulder,peakArmpit,intersection_elbow[0]))
+            #ptA = np.stack((intersection_elbow[1],intersection_shoulder[1],peakshoulder,peakArmpit,intersection_elbow[0]))
+            ptA = np.stack((intersection_elbow[1],intersection_shoulder[1],peakArmpit,intersection_elbow[0]))
             self.upperArmPtsR = ptA
             self.peakshoulderR = peakshoulder
 
@@ -706,11 +708,15 @@ class Segmentation(object):
             exit()
 
         if side == 0:
-            ptA = np.stack((pos2D[0],intersection_rsh,intersection_knee[1],intersection_knee[0],peak1))
+            #ptA = np.stack((pos2D[0],intersection_rsh,intersection_knee[1],intersection_knee[0],peak1))
+            ptA = np.stack((peak1, intersection_rsh,intersection_knee[1],intersection_knee[0]))
             self.thighPtsR = ptA
+            self.pos0 = pos2D[0]
         else :
-            ptA = np.stack((pos2D[0],intersection_rsh,intersection_knee[0],intersection_knee[1],peak1))  
+            #ptA = np.stack((pos2D[0],intersection_rsh,intersection_knee[0],intersection_knee[1],peak1))  
+            ptA = np.stack((peak1, intersection_rsh,intersection_knee[0],intersection_knee[1]))  
             self.thighPtsL = ptA
+            self.pos0 = pos2D[0]
         # Fill up the polygon
         bw_up = ( (A*self.polygonOutline(ptA)))
         ## Find Calf
