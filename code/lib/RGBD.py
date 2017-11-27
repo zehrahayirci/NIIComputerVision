@@ -815,7 +815,7 @@ class RGBD():
         [self.segm.calfPtsR[1], self.segm.calfPtsR[0]], \
         ])
         labelList = [[],[2,2,12,12], [2,10,10,2], [4,4,11,11], [4,4,10,10], [10,10,5,5], [6,6,5,5], [10,7,7,10], [8,8,7,7], \
-        [10,9,9,10], [10,10,10,10,10,10,10,10,10], [11,11], [12,12], [8,8], [6,6]]
+        [10,9,9,10], [10,10,10,10,10,10,10,10,10], [11,11,11,11], [12,12,12,12], [8,8,13,13], [6,6,14,14]]
         self.test = np.zeros((53,3))
         t=0
         
@@ -883,11 +883,11 @@ class RGBD():
                 points.append(points[0]+vector+[-0.05,0,0])
 
             coordGbl =  np.zeros((len(points)*2,3))
-            depthmap = self.depth_image*(self.labels==bp)
-            depthMax = np.amax(np.amax(depthmap))
-            depthMin = np.amin(np.amin(depthmap[np.nonzero(depthmap)]))
             # for each line of one body part
             for p in range(len(points)):
+                depthmap = self.depth_image*(self.labels==labelList[bp][p])
+                depthMax = np.amax(np.amax(depthmap))
+                depthMin = np.amin(np.amin(depthmap[np.nonzero(depthmap)]))
                 point = points[p]
                 coordGbl[p] = np.array([point[0], point[1], depthMin])
                 coordGbl[p+len(points)] = np.array([point[0], point[1], depthMax])
