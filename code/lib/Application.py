@@ -424,7 +424,7 @@ class Application(tk.Frame):
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
-        Parts[1].MC.SaveToPlyExt("skeleton"+str(bp)+".ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
+        Parts[1].MC.SaveToPlyExt("skeleton"+str(self.Index)+".ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
         #Parts[1].MC.SaveToPlyExt("testtttt.ply",44,0,self.RGBD[0].test,[])
         # save the coordinate of the body part
         for bp in range(bpstart, nbBdyPart):
@@ -594,6 +594,9 @@ class Application(tk.Frame):
             #NewPose = Tracker.RegisterRGBDMesh_optimize(newRGBD[0],newRGBD[0].skeVtx,preRGBD[0].skeVtx,StitchBdy.StitchedVertices,StitchBdy.StitchedNormales, Id4)
             #NewPoses = Tracker.RegisterAllTs(newRGBD[0], newRGBD[0].skeVtx,preRGBD[0].skeVtx, globalVtx_bp)
             
+            # Transform the bounding-boxes into current image
+            newRGBD[0].coordsGbl = StitchBdy.TransfoBB(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], preRGBD[0].coordsGbl)
+
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
             nb_facesGlo = 0
@@ -613,10 +616,10 @@ class Application(tk.Frame):
                 # Transform in the current image
                 #Skeleton tracking
                 print "BP: ", bp
-                Tbb_s.append(StitchBdy.GetBBTransfo(self.pos2d, imgk, formerIdx, self.RGBD[0], preRGBD[0], newRGBD[0], bp, Id4))
+                Tbb_s.append(StitchBdy.GetSkeTransfo(self.pos2d, imgk, formerIdx, self.RGBD[0], preRGBD[0], newRGBD[0], bp, Id4))
                 if bp>=11:
                     Tbb_icp = Tracker.RegisterRGBDMesh_optimize(newRGBD[bp],newRGBD[0].skeVtx,preRGBD[0].skeVtx,StitchBdy.TransformVtx(Parts[bp].MC.Vertices,np.dot(T_Pose[bp],Tg[bp]),1),StitchBdy.TransformNmls(Parts[bp].MC.Normales,np.dot(T_Pose[bp],Tg[bp]),1), Tbb_s[bp]) 
-                    #Tbb_s[bp] = Tbb_icp
+                    Tbb_s[bp] = Tbb_icp
                 #T_Pose[bp] = np.dot(NewPose, T_Pose[bp])
                 T_Pose[bp] = np.dot(Tbb_s[bp], T_Pose[bp])
                 #T_Pose[bp] = np.dot(Tbb_icp[bp], T_Pose[bp])
@@ -675,7 +678,7 @@ class Application(tk.Frame):
             Parts[bp].MC.SaveToPlyExt("OverlappingBody"+imgkStr+".ply",overlapBdy.StitchedVertices.shape[0],0,overlapBdy.StitchedVertices,[],0)
              # save the coordinate of the body part
             for bp in range(bpstart, nbBdyPart):
-                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],T_Pose[bp], 1), bp)
+                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],Id4, 1), bp)
 
 
             # projection in 2d space to draw the 3D model
@@ -694,6 +697,7 @@ class Application(tk.Frame):
             for i in range(1,len(self.RGBD[0].coordsGbl)):
                 # Get corners of OBB
                 pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],T_Pose[i])
+                pt = self.RGBD[0].GetProjPts2D_optimize(newRGBD[0].coordsGbl[i], Id4)
                 pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
                 pt[:,1] = np.maximum(0,np.minimum(pt[:,1], self.Size[0]-1))
                 # create point of the boxes

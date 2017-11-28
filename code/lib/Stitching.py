@@ -152,9 +152,62 @@ class Stitch():
             #Tg[bp][0:3, 3] = ctr
             print RotZ
 
+    def TransfoBB(slef, curPos, prevPos, BB):
+        """
+        Transform the corners of bounding-boxes according to the position of the skeleton
+        :param curPos: position in 3D of the junctions
+        :param prevPos: position in 3D of the junctions
+        :param BB: the global bounding-boxes
+        :return: the new bounding-boxes in global
+        """
+        AllrelatedJun = [ [],\
+        [[5,4,6],[5,4,6],[6,5,7],[6,5,7]], [[5,4,6],[4,5,20,1],[4,5,20,1],[5,4,6]], \
+        [[9,8,10],[9,8,10],[10,11,9],[10,11,9]], [[9,8,10],[9,8,10],[9,8,20,1],[9,8,20,1]], \
+        [[16,0,17,1,12,13],[16,17,0,1],[17,16,18],[17,16,18]], [[18,17,19],[18,17,19],[17,16,18],[17,16,18]], \
+        [[12,0,13,1,16,17],[13,12,14],[13,12,14],[12,0,13,1]], [[14,13,15],[14,13,15],[13,12,14],[13,12,14]], \
+        [[2,20,4,1],[3,2],[3,2],[2,20,8,1]], \
+        [[4,5,20,1],[4,5,20,1],[2,20,4,1],[2,20,8,1],[8,9,20,1],[8,9,20,1],[16,17,0,1],[16,12,0,1,17,13],[12,0,13,1]], \
+        [[10,9,11],[10,9,11],[10,11],[10,11]], [[6,5,7],[6,5,7],[6,7],[6,7]], \
+        [[14,13,15],[14,13,15],[14,15],[14,15]], [[18,17,19],[18,17,19],[18,19],[18,19]]
+        ]
+        
+        translate = curPos[0,:]-prevPos[0,:]
+        
 
 
-    def GetBBTransfo(self, pos2d,cur,prev,RGBD ,pRGBD, nRGBD, bp, pose):
+        newBBs=[]
+        newBBs.append(np.array((0,0,0)))
+        for bp in range(1,len(AllrelatedJun)):
+            relatedJunList = AllrelatedJun[bp]
+            newBB = np.zeros((len(BB[bp]),3))
+            for p in range(len(relatedJunList)):
+                relatedJuns = relatedJunList[p]
+                point = BB[bp][p]
+                weights = []
+                for r in range(len(relatedJuns)):
+                    relatedJun = relatedJuns[r]
+                    weights.append(np.linalg.norm(prevPos[relatedJun]-point))
+                    newBB[p,:] += weights[r]*(curPos[relatedJun]-prevPos[relatedJun])
+                newBB[p,:] /= sum(weights)
+                #newBB[p,:] += point
+                newBB[p,:] = point + translate
+
+            for p in range(len(relatedJunList),len(relatedJunList)*2):
+                relatedJuns = relatedJunList[p-len(relatedJunList)]
+                point = BB[bp][p]
+                weights = []
+                for r in range(len(relatedJuns)):
+                    relatedJun = relatedJuns[r]
+                    weights.append(np.linalg.norm(prevPos[relatedJun]-point))
+                    newBB[p,:] += weights[r]*(curPos[relatedJun]-prevPos[relatedJun])
+                newBB[p,:] /= sum(weights)
+                #newBB[p,:] += point
+                newBB[p,:] = point + translate
+                
+            newBBs.append(newBB)
+        return newBBs
+
+    def GetSkeTransfo(self, pos2d,cur,prev,RGBD ,pRGBD, nRGBD, bp, pose):
         """
         Transform Pose matrix to move the model body parts according to the position of the skeleton
         For now just a rotation in the z axis
