@@ -641,6 +641,49 @@ class Tracker():
         
         return res        
 
+    def RegisterBB(self, bb_cur, bb_prev):
+        '''
+        Function that estimate the relative rigid transformation between corners of two boundingboxes of the same body part
+        :param bb_cur: the bounding-boxes of current frame in one body part
+        :param bb_prev: the bounding-boxes of previous frame in one body part
+        :return: Transform matrix between two BB
+        '''
+        # initial
+        transfo = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+        A = np.zeros((bb_cur.shape[0]*3,12))
+        b = np.zeros((bb_cur.shape[0]*3,1))
+        for i in range(bb_cur.shape[0]):
+            A[i*3,0:3] = bb_prev[i,:]
+            A[i*3, 9] = 1
+            A[i*3+1, 3:6] = bb_prev[i,:]
+            A[i*3+1, 10] = 1
+            A[i*3+2, 6:9] = bb_prev[i,:]
+            A[i*3+2, 11] = 1
+            b[i*3] = bb_cur[i,0]
+            b[i*3+1] = bb_cur[i,1]
+            b[i*3+2] = bb_cur[i,2]
+        # Ax=b
+        res = np.linalg.lstsq(A, b)
+        print "residual c="
+        print res[1]
+        # reshape
+        x = res[0]
+        transfo[0,0] = x[0]
+        transfo[0,1] = x[1]
+        transfo[0,2] = x[2]
+        transfo[1,0] = x[3]
+        transfo[1,1] = x[4]
+        transfo[1,2] = x[5]
+        transfo[2,0] = x[6]
+        transfo[2,1] = x[7]
+        transfo[2,2] = x[8]
+        transfo[0,3] = x[9]
+        transfo[1,3] = x[10]
+        transfo[2,3] = x[11]
+
+        return transfo
+        
+
     def RegisterAllTs(self, NewImage, NewSkeVtx, PreSkeVtx, Vtx_bp):
         '''
         Function that estimate the relative rigid transformations of all bodypart between an input RGB-D images and model(vertex) with pre-frame pose
