@@ -887,19 +887,23 @@ class RGBD():
                     point2d = interPointList2D[bp][p-2]
                 else:
                     point2d = interPointList2D[bp][p]
-                line = self.depth_image.shape[0]
-                col = self.depth_image.shape[1]
-                mask = np.ones([line,col,2])
-                mask = mask*point2d
-                mask[:,:,0]+= self.transCrop[0]
-                mask[:,:,1]+= self.transCrop[1]
-                lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
-                colIdx = np.array([np.arange(col) for _ in range(line)])
-                ind = np.stack( (colIdx,lineIdx), axis = 2)
-                mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
-                mask = (mask < 16)
-                depthMax = np.amax(np.amax(self.depth_image*mask))
-                depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*mask)]))
+                if (bp==6 or bp==8 or bp==13 or bp==14) and (p==0 or p==1):
+                    depthMax = np.amax(np.amax(self.depth_image*(self.labels==labelList[bp][p])))
+                    depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*(self.labels==labelList[bp][p]))]))
+                else:
+                    line = self.depth_image.shape[0]
+                    col = self.depth_image.shape[1]
+                    mask = np.ones([line,col,2])
+                    mask = mask*point2d
+                    mask[:,:,0]+= self.transCrop[0]
+                    mask[:,:,1]+= self.transCrop[1]
+                    lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
+                    colIdx = np.array([np.arange(col) for _ in range(line)])
+                    ind = np.stack( (colIdx,lineIdx), axis = 2)
+                    mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
+                    mask = (mask < 16)
+                    depthMax = np.amax(np.amax(self.depth_image*mask))
+                    depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*mask)]))
 
                 point = points[p]
                 coordGbl[p] = np.array([point[0], point[1], depthMin])
