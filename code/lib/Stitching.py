@@ -160,6 +160,7 @@ class Stitch():
         :param BB: the global bounding-boxes
         :return: the new bounding-boxes in global
         """
+        '''
         AllrelatedJun = [ [],\
         [[5,4,6],[5,4,6],[6,5,7],[6,5,7]], [[5,4,6],[4,5,20,1],[4,5,20,1],[5,4,6]], \
         [[9,8,10],[9,8,10],[10,11,9],[10,11,9]], [[9,8,10],[9,8,10],[9,8,20,1],[9,8,20,1]], \
@@ -170,10 +171,18 @@ class Stitch():
         [[10,9,11],[10,9,11],[10,11],[10,11]], [[6,5,7],[6,5,7],[6,7],[6,7]], \
         [[14,13,15],[14,13,15],[14,15],[14,15]], [[18,17,19],[18,17,19],[18,19],[18,19]]
         ]
-        
-        translate = curPos[0,:]-prevPos[0,:]
-        
-
+        '''
+        AllrelatedJun = [ [],\
+        [[5],[5],[6],[6]], [[5],[4],[4],[5]], \
+        [[9],[9],[10],[10]], [[9],[9],[8],[8]], \
+        [[16,0,12],[16,0],[17],[17]], [[18],[18],[17],[17]], \
+        [[12,0,16],[13],[13],[12,0]], [[14],[14],[13],[13]], \
+        [[4],[3,2],[3,2],[8]], \
+        [[4],[4],[4],[8],[8],[8],[16,0],[16,12,0],[12,0]], \
+        [[10],[10],[10,11],[10,11]], [[6],[6],[6,7],[6,7]], \
+        [[14],[14],[14,15],[14,15]], [[18],[18],[18,19],[18,19]]
+        ]
+        #'''
 
         newBBs=[]
         newBBs.append(np.array((0,0,0)))
@@ -186,11 +195,11 @@ class Stitch():
                 weights = []
                 for r in range(len(relatedJuns)):
                     relatedJun = relatedJuns[r]
-                    weights.append(np.linalg.norm(prevPos[relatedJun]-point))
+                    weights.append(1/np.linalg.norm(prevPos[relatedJun]-point))
+                    weights[r] *= weights[r]
                     newBB[p,:] += weights[r]*(curPos[relatedJun]-prevPos[relatedJun])
                 newBB[p,:] /= sum(weights)
-                #newBB[p,:] += point
-                newBB[p,:] = point + translate
+                newBB[p,:] += point
 
             for p in range(len(relatedJunList),len(relatedJunList)*2):
                 relatedJuns = relatedJunList[p-len(relatedJunList)]
@@ -201,8 +210,7 @@ class Stitch():
                     weights.append(np.linalg.norm(prevPos[relatedJun]-point))
                     newBB[p,:] += weights[r]*(curPos[relatedJun]-prevPos[relatedJun])
                 newBB[p,:] /= sum(weights)
-                #newBB[p,:] += point
-                newBB[p,:] = point + translate
+                newBB[p,:] += point
                 
             newBBs.append(newBB)
         return newBBs
@@ -381,7 +389,52 @@ class Stitch():
             coord[3,3] = 0
 
         return coord
+    
+    def blendMesh(self, pca, bb_cur, bb_prev, vertices):
+        '''
+        change vertices according bb_prev to bb_cur
+        :param pca: RGBD[0].pca[bp]
+        :param bb_cur: bounding-boxes in current frame in global coordinate
+        :param bb_prev: bounding-boxes in previous frame in global coordinate
+        :param vertices: vertices in previous frame in local coordinate
+        :return: vertices in current frame in local coordinate
+        '''
+        '''
+        #initial
+        bbL_cur = pca.transform(bb_cur)
+        bbL_prev = pca.transform(bb_prev)
+        vertices_new = np.zeros((vertices.shape[0], 3))
+        #blending
+        for i in range(vertices.shape[0]):
+            weights = []
+            for b in range(bbL_cur.shape[0]):
+                weights.append(1/np.linalg.norm(vertices[i,:]-bbL_prev[b,:]))
+                vertices_new[i,:]+=(bbL_cur[b,:]-bbL_prev[b,:])*weights[b]
+            vertices_new[i,:]/=sum(weights)
+            vertices_new[i,:]+=vertices[i,:]
 
+        return vertices_new
+        '''
+        #initial
+        bbL_cur = pca.transform(bb_cur)
+        bbL_prev = pca.transform(bb_prev)
+        vertices_new = np.zeros((vertices.shape[0], 3))
+        weights = np.zeros((vertices.shape[0]))
+        diff = bbL_cur-bbL_prev
+        #blending
+        for b in range(bbL_cur.shape[0]):
+            temp_weight = 1/np.linalg.norm(vertices-bbL_prev[b,:], axis=1)
+            vertices_new[:,0] += diff[b,0]*temp_weight
+            vertices_new[:,1] += diff[b,1]*temp_weight
+            vertices_new[:,2] += diff[b,2]*temp_weight
+            weights += temp_weight
+        vertices_new[:,0] /= weights
+        vertices_new[:,1] /= weights
+        vertices_new[:,2] /= weights
+        vertices_new += vertices
+
+        return vertices_new
+        #'''
     def GetPos(self,bp):
         '''
         According to the body parts, get the correct index of junctions
