@@ -672,7 +672,7 @@ class RGBD():
             elif i==19:
                 j=14
             
-            depth = abs(self.coordsGbl[j][4,2]-self.coordsGbl[j][0,2])/2
+            depth = abs(np.amax(self.coordsGbl[j][:,2])-np.amin(self.coordsGbl[j][0,2]))/2
             if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:                
                 skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
             else:
@@ -814,9 +814,9 @@ class RGBD():
         [self.segm.calfPtsL[1], self.segm.calfPtsL[0]], \
         [self.segm.calfPtsR[1], self.segm.calfPtsR[0]], \
         ])
-        labelList = [[],[2,2,12,12], [2,10,10,2], [4,4,11,11], [4,4,10,10], [10,10,5,5], [6,6,5,5], [10,7,7,10], [8,8,7,7], \
-        [10,9,9,10], [10,10,10,10,10,10,10,10,10], [11,11,11,11], [12,12,12,12], [8,8,13,13], [6,6,14,14]]
-        self.test = np.zeros((53,3))
+        interPointList2D = copy.deepcopy(interPointList)
+        labelList = [[],[2,2,12,12], [2,2,2,2], [4,4,11,11], [4,4,4,4], [5,5,5,5], [6,6,5,5], [5,7,7,7], [8,8,7,7], \
+        [9,9,9,9], [2,2,9,9,4,4,5,5,7], [11,11,11,11], [12,12,12,12], [8,8,13,13], [6,6,14,14]]
         t=0
         
 
@@ -834,9 +834,6 @@ class RGBD():
                 interPointList[i][j][0] = ( interPointList[i][j][0] - self.intrinsic[0,2])/self.intrinsic[0,0]*depth
                 interPointList[i][j][1] = ( interPointList[i][j][1] - self.intrinsic[1,2])/self.intrinsic[1,1]*depth                   
                 interPointList[i][j].append(depth)
-                self.test[t][0] = interPointList[i][j][0]
-                self.test[t][1] = interPointList[i][j][1]
-                self.test[t][2] = depth
                 t+=1
         
         # for each body part
@@ -885,9 +882,25 @@ class RGBD():
             coordGbl =  np.zeros((len(points)*2,3))
             # for each line of one body part
             for p in range(len(points)):
-                depthmap = self.depth_image*(self.labels==labelList[bp][p])
-                depthMax = np.amax(np.amax(depthmap))
-                depthMin = np.amin(np.amin(depthmap[np.nonzero(depthmap)]))
+                # get depth
+                if (bp==11 or bp==12 or bp==13 or bp==14) and (p==2 or p==3):
+                    point2d = interPointList2D[bp][p-2]
+                else:
+                    point2d = interPointList2D[bp][p]
+                line = self.depth_image.shape[0]
+                col = self.depth_image.shape[1]
+                mask = np.ones([line,col,2])
+                mask = mask*point2d
+                mask[:,:,0]+= self.transCrop[0]
+                mask[:,:,1]+= self.transCrop[1]
+                lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
+                colIdx = np.array([np.arange(col) for _ in range(line)])
+                ind = np.stack( (colIdx,lineIdx), axis = 2)
+                mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
+                mask = (mask < 16)
+                depthMax = np.amax(np.amax(self.depth_image*mask))
+                depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*mask)]))
+
                 point = points[p]
                 coordGbl[p] = np.array([point[0], point[1], depthMin])
                 coordGbl[p+len(points)] = np.array([point[0], point[1], depthMax])
