@@ -410,7 +410,7 @@ class Segmentation(object):
             elbow = 9
             wrist = 10
             foreArmPts = self.foreArmPtsR
-            peakshoulder = self.upperArmPtsR[1]
+            intersection_shoulder = self.upperArmPtsR[1]
             peakArmpit = self.upperArmPtsR[2]
         # Left arm
         else :
@@ -418,7 +418,7 @@ class Segmentation(object):
             elbow = 5
             wrist = 6
             foreArmPts = self.foreArmPtsL
-            peakshoulder = self.upperArmPtsL[1]
+            intersection_shoulder = self.upperArmPtsL[1]
             peakArmpit = self.upperArmPtsL[2]
 
         ## lower arm
@@ -480,25 +480,36 @@ class Segmentation(object):
 
         ## upper arm
         # FindSlopes give the slope of a line made by two points
-        slopesshoulderpeak = self.findSlope(peakshoulder, peakArmpit)
+        slopesshoulderpeak = self.findSlope(intersection_shoulder, peakArmpit)
         a_pen = slopesshoulderpeak[0]
         b_pen = slopesshoulderpeak[1]
         c_pen = slopesshoulderpeak[2]
 
         # compute the intersection between the slope and the extremety of the body
-        intersection_shoulderpeak=self.inferedPoint(A,a_pen,b_pen,c_pen,peakshoulder/2+peakArmpit/2,0.5*bone)
-        if LA.norm(intersection_shoulderpeak[0]-peakshoulder)<LA.norm(intersection_shoulderpeak[1]-peakshoulder):
-            peakshoulder = intersection_shoulderpeak[0]
+        intersection_shoulderpeak=self.inferedPoint(A,a_pen,b_pen,c_pen,intersection_shoulder/2+peakArmpit/2,0.5*bone)
+        if LA.norm(intersection_shoulderpeak[0]-intersection_shoulder)<LA.norm(intersection_shoulderpeak[1]-intersection_shoulder):
+            intersection_shoulder = intersection_shoulderpeak[0]
             peakArmpit = intersection_shoulderpeak[1]
         else:
-            peakshoulder = intersection_shoulderpeak[1]
+            intersection_shoulder = intersection_shoulderpeak[1]
             peakArmpit = intersection_shoulderpeak[0]
         
+        #find peakshoulder
+        slopesshoulder = self.findSlope(self.peakshoulderL, self.peakshoulderR)
+        a_pen = slopesshoulder[0]
+        b_pen = slopesshoulder[1]
+        c_pen = slopesshoulder[2]
+        intersection_peakshoulder=self.inferedPoint(A,a_pen,b_pen,c_pen,self.peakshoulderL/2+self.peakshoulderR/2)
+        if side==0:
+            peakshoulder = intersection_peakshoulder[1]
+        else:
+            peakshoulder = intersection_peakshoulder[0]
+
         # check if intersection is on the head
-        if peakshoulder[1]<pos2D[3][1]:
+        if intersection_shoulder[1]<pos2D[3][1]:
             print("intersection shoulder is upper the head (re)")
-            peakshoulder[1] = pos2D[2][1]
-            peakshoulder[0] = np.round(-(b_pen*peakshoulder[1]+c_pen)/a_pen)
+            intersection_shoulder[1] = pos2D[2][1]
+            intersection_shoulder[0] = np.round(-(b_pen*intersection_shoulder[1]+c_pen)/a_pen)
 
         # constraint on peakArmpit
         if side == 0 and peakArmpit[0]>intersection_elbow[0][0]:
@@ -528,16 +539,16 @@ class Segmentation(object):
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = tmp
             print("line504")
-
+        
         # create the upperarm polygon out the five point defining it
         if side != 0 :
-            ptA = np.stack((intersection_elbow[1],peakshoulder,peakArmpit,intersection_elbow[0]))
+            ptA = np.stack((intersection_elbow[1],intersection_shoulder,peakArmpit,intersection_elbow[0]))
             self.upperArmPtsL = ptA
-            self.peakshoulderL = np.array(peakshoulder)
+            self.peakshoulderL = np.array(peakshoulder).astype(np.int32)
         else:
-            ptA = np.stack((intersection_elbow[0],peakshoulder,peakArmpit,intersection_elbow[1]))
+            ptA = np.stack((intersection_elbow[0],intersection_shoulder,peakArmpit,intersection_elbow[1]))
             self.upperArmPtsR = ptA
-            self.peakshoulderR = np.array(peakshoulder)
+            self.peakshoulderR = np.array(peakshoulder).astype(np.int32)
 
         bw_upper = (A*self.polygonOutline(ptA))
 
