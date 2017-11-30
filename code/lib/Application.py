@@ -329,7 +329,7 @@ class Application(tk.Frame):
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = '051_1027_01'
+        matfilename = '031_1027_01'
         mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
         #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
@@ -343,7 +343,7 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
         
         # number of images in the sequence. Start and End
-        self.Index = 9
+        self.Index = 1
         nunImg = 25
         sImg = 1
 
@@ -427,7 +427,7 @@ class Application(tk.Frame):
             Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsGbl[bp],Id4,1), bp)
             Parts[1].MC.SaveBBToPlyExt("BBL_"+str(self.Index)+"_"+str(bp)+".ply", StitchBdy.TransformVtx(self.RGBD[0].coordsL[bp],Id4,1), bp)
 
-        # projection in 2d space to draw the 3D model
+        # projection in 2d space to draw the 3D model(meshes)
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         for bp in range(bpstart,nbBdyPart):
@@ -437,12 +437,27 @@ class Application(tk.Frame):
                     PoseBP[bp][i][j] = Parts[bou].Tlg[i][j]
             rendering = self.RGBD[0].DrawMesh(rendering,Parts[bou].MC.Vertices,Parts[bou].MC.Normales,PoseBP[bp], 1, self.color_tag)
         # show segmentation result
-        img_label_temp =(self.RGBD[0].lImages[0][self.Index].astype(np.double)/7000*255).astype(np.uint8)
-        img_label = rendering.copy()
-        img_label[:,:,0] = img_label_temp.copy()
-        img_label[:,:,1] = img_label_temp.copy()
-        img_label[:,:,2] = img_label_temp.copy()
-        img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16),0:3] = 1000
+        img_label_temp = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        img_label_temp = self.DrawColors2D(self.RGBD[0], img_label_temp)
+        img_label = img_label_temp.copy()
+        img_label[:,:,0] = img_label_temp[:,:,2].copy()
+        img_label[:,:,1] = img_label_temp[:,:,1].copy()
+        img_label[:,:,2] = img_label_temp[:,:,0].copy()
+        for i in range(3):
+            for j in range(3):
+                img_label[self.pos2d[0,self.Index][:,1].astype(np.int16)+i-1, self.pos2d[0,self.Index][:,0].astype(np.int16)+j-1,0] = 255
+                img_label[self.pos2d[0,self.Index][:,1].astype(np.int16)+i-1, self.pos2d[0,self.Index][:,0].astype(np.int16)+j-1,1] = 220
+                img_label[self.pos2d[0,self.Index][:,1].astype(np.int16)+i-1, self.pos2d[0,self.Index][:,0].astype(np.int16)+j-1,2] = 240
+        img_label = img_label.astype(np.double)/255
+        # show depth map result
+        img_depthmap_temp =(self.RGBD[0].lImages[0][self.Index].astype(np.double)/7000*255).astype(np.uint8)
+        img_depthmap = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        img_depthmap[:,:,0] = img_depthmap_temp.copy()
+        img_depthmap[:,:,1] = img_depthmap_temp.copy()
+        img_depthmap[:,:,2] = img_depthmap_temp.copy()
+        for i in range(3):
+            for j in range(3):
+                img_depthmap[self.pos2d[0,self.Index][:,1].astype(np.int16)+i-1, self.pos2d[0,self.Index][:,0].astype(np.int16)+j-1,0:3] = 1000
         # draw Boundingboxes
         for i in range(1,len(self.RGBD[0].coordsGbl)):
             # Get corners of OBB
@@ -525,7 +540,8 @@ class Application(tk.Frame):
                 bbrendering[rr,cc, 1] = 230
                 bbrendering[rr,cc, 2] = 250
         # mix
-        result_stack = np.concatenate((rendering*0.0025+img_label*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_label*0.0020), axis=1)
+        result_stack = np.concatenate((rendering*0.0025+img_depthmap*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_depthmap*0.0020), axis=1)
+        result_stack = np.concatenate((result_stack, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label), axis=1)
         print ("frame"+str(self.Index))
         cv2.imshow("BB", result_stack)
         cv2.waitKey(1)
@@ -586,6 +602,16 @@ class Application(tk.Frame):
 
             # Transform the bounding-boxes into current image
             newRGBD[0].coordsGbl = StitchBdy.TransfoBB(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], preRGBD[0].coordsGbl)
+            # resegment
+            for bp in range(nbBdyPart):
+                if bp == 0:
+                    newRGBD[bp].reSegmentation()
+                    newRGBD[bp].depth_image *= (newRGBD[bp].labels > 0) 
+                else:
+                    newRGBD[bp].depth_image *= (newRGBD[0].labels == bp)
+                # Vertex and Normal map
+                newRGBD[bp].Vmap_optimize()   
+                newRGBD[bp].NMap_optimize()
 
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
@@ -593,7 +619,7 @@ class Application(tk.Frame):
             #Initiate stitcher object 
             StitchBdy = Stitcher.Stitch(nbBdyPart)     
             
-            # projection in 2d space to draw the 3D model
+            # projection in 2d space to draw the 3D model(meshes)
             rendering = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             rendering_originmesh = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -616,7 +642,7 @@ class Application(tk.Frame):
                 # blending vertices in each body mesh
                 Parts[bp].MC.Vertices = StitchBdy.blendMesh(self.RGBD[0].pca[bp], newRGBD[0].coordsGbl[bp], preRGBD[0].coordsGbl[bp], Parts[bp].MC.Vertices)
 
-                # projection in 2d space to draw the 3D model
+                # projection in 2d space to draw the 3D model(meshes)
                 rendering = self.RGBD[0].DrawMesh(rendering,Parts[bp].MC.Vertices,Parts[bp].MC.Normales,PoseBP[bp], 1, self.color_tag)
 
                 # TSDF Fusion of the body part
@@ -668,14 +694,29 @@ class Application(tk.Frame):
                 Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],Id4, 1), bp)
 
 
-            # projection in 2d space to draw the 3D model
+            # projection in 2d space to draw the 3D model(meshes)
             # show segmentation result
-            img_label_temp =(self.RGBD[0].lImages[0][imgk].astype(np.double)/7000*255).astype(np.uint8)
-            img_label = rendering.copy()
-            img_label[:,:,0] = img_label_temp
-            img_label[:,:,1] = img_label_temp
-            img_label[:,:,2] = img_label_temp
-            img_label[self.pos2d[0,imgk][:,1].astype(np.int16), self.pos2d[0,imgk][:,0].astype(np.int16),1:3] = 1000
+            img_label_temp = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            img_label_temp = self.DrawColors2D(newRGBD[0], img_label_temp)
+            img_label = img_label_temp.copy()
+            img_label[:,:,0] = img_label_temp[:,:,2].copy()
+            img_label[:,:,1] = img_label_temp[:,:,1].copy()
+            img_label[:,:,2] = img_label_temp[:,:,0].copy()
+            for i in range(3):
+                for j in range(3):
+                    img_label[self.pos2d[0,imgk][:,1].astype(np.int16)+i-1, self.pos2d[0,imgk][:,0].astype(np.int16)+j-1,0] = 255
+                    img_label[self.pos2d[0,imgk][:,1].astype(np.int16)+i-1, self.pos2d[0,imgk][:,0].astype(np.int16)+j-1,1] = 220
+                    img_label[self.pos2d[0,imgk][:,1].astype(np.int16)+i-1, self.pos2d[0,imgk][:,0].astype(np.int16)+j-1,2] = 240            
+            img_label = img_label.astype(np.double)/255
+            # show depth map result
+            img_depthmap = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            img_depthmap_temp =(self.RGBD[0].lImages[0][imgk].astype(np.double)/7000*255).astype(np.uint8)
+            img_depthmap[:,:,0] = img_depthmap_temp
+            img_depthmap[:,:,1] = img_depthmap_temp
+            img_depthmap[:,:,2] = img_depthmap_temp
+            for i in range(3):
+                for j in range(3):
+                    img_depthmap[self.pos2d[0,imgk][:,1].astype(np.int16)+i-1, self.pos2d[0,imgk][:,0].astype(np.int16)+j-1,1:3] = 1000
             # draw Boundingboxes
             for i in range(1,len(self.RGBD[0].coordsGbl)):
                 # Get corners of OBB
@@ -760,7 +801,8 @@ class Application(tk.Frame):
                     bbrendering[rr,cc, 2] = 250
                 
             # mix
-            result_stack = np.concatenate((rendering*0.0025+img_label*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_label*0.0020), axis=1)
+            result_stack = np.concatenate((rendering*0.0025+img_depthmap*0.0020, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, bbrendering*0.0020+img_depthmap*0.0020), axis=1)
+            result_stack = np.concatenate((result_stack, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label), axis=1)
             print ("frame"+imgkStr)
             cv2.imshow("BB", result_stack)
             cv2.waitKey(1)
@@ -771,6 +813,7 @@ class Application(tk.Frame):
             else:
                 imgstr = str(imgk)
             cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/bb_' + imgstr + '.png', result_stack*255)
+            #cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/s_' + imgstr + '_ori.png', img_label*255)
 
         TimeStart_Lapsed = time.time() - TimeStart
         print "total time: %f" %(TimeStart_Lapsed)
