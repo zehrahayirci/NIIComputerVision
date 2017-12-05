@@ -10,7 +10,9 @@ import numpy as np
 import math
 from math import cos, sin
 from numpy import linalg as LA
-import imp
+import imp    
+from skimage.draw import line_aa
+import copy
 PI = math.pi
 
 General = imp.load_source('General', './lib/General.py')
@@ -152,7 +154,7 @@ class Stitch():
             #Tg[bp][0:3, 3] = ctr
             print RotZ
 
-    def TransfoBB(slef, curPos, prevPos, BB):
+    def TransfoBB(self, curPos, prevPos, BB):
         """
         Transform the corners of bounding-boxes according to the position of the skeleton
         :param curPos: position in 3D of the junctions
@@ -172,48 +174,149 @@ class Stitch():
         [[14,13,15],[14,13,15],[14,15],[14,15]], [[18,17,19],[18,17,19],[18,19],[18,19]]
         ]
         '''
-        AllrelatedJun = [ [],\
-        [[5],[5],[6],[6]], [[5],[4],[4],[5]], \
-        [[9],[9],[10],[10]], [[9],[9],[8],[8]], \
-        [[16,0,12],[16,0],[17],[17]], [[18],[18],[17],[17]], \
-        [[12,0,16],[13],[13],[12,0]], [[14],[14],[13],[13]], \
-        [[4],[3,2],[3,2],[8]], \
-        [[4],[4],[4],[8],[8],[8],[16,0],[16,12,0],[12,0]], \
-        [[10],[10],[10,11],[10,11]], [[6],[6],[6,7],[6,7]], \
-        [[14],[14],[14,15],[14,15]], [[18],[18],[18,19],[18,19]]
+        AllrelatedBone = [ [],\
+        [[0,1],[0,1],[0],[0]], [[0,1],[1,2],[1,2],[0,1]], \
+        [[3,4],[3,4],[3],[3]], [[3,4],[3,4],[4,5],[4,5]], \
+        [[11,8,15],[11,10],[10,9],[10,9]], [[9],[9],[9,10],[9,10]], \
+        [[8,11,15],[7,6],[7,6],[7,8]], [[6],[6],[6,7],[6,7]], \
+        [[2,14,12],[13,12],[13,12],[5,12,14]], \
+        [[1,2],[1,2],[2,12,14],[5,12,14],[5,4],[5,4],[11,10],[11,8,15],[7,8]], \
+        [[3],[3],[3],[3]], [[0],[0],[0],[0]], \
+        [[6],[6],[6],[6]], [[9],[9],[9],[9]]
         ]
         #'''
+        bonelist = [[5,6],[4,5],[20,4],[9,10],[8,9],[20,8], \
+        [13,14],[12,13],[0,12],[17,18],[16,17],[0,16], \
+        [20,2],[2,3],[20,1],[0,1]]
 
         newBBs=[]
         newBBs.append(np.array((0,0,0)))
-        for bp in range(1,len(AllrelatedJun)):
-            relatedJunList = AllrelatedJun[bp]
+        for bp in range(1,len(AllrelatedBone)):
+            relatedBoneList = AllrelatedBone[bp]
             newBB = np.zeros((len(BB[bp]),3))
-            for p in range(len(relatedJunList)):
-                relatedJuns = relatedJunList[p]
+            for p in range(len(relatedBoneList)):
+                relatedBones = relatedBoneList[p]
                 point = BB[bp][p]
+                pt = np.array([0.,0.,0.,1.])
+                pt[0:3] = BB[bp][p]
                 weights = []
-                for r in range(len(relatedJuns)):
-                    relatedJun = relatedJuns[r]
-                    weights.append(1/np.linalg.norm(prevPos[relatedJun]-point))
-                    weights[r] *= weights[r]
-                    newBB[p,:] += weights[r]*(curPos[relatedJun]-prevPos[relatedJun])
+                for r in range(len(relatedBones)):
+                    relatedBone = relatedBones[r]
+                    bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
+                    weights.append(1/np.linalg.norm(bonecenter-point))
+                    newBB[p,:] += weights[r]*np.dot(self.boneTrans[relatedBone], pt.T)[0:3]
                 newBB[p,:] /= sum(weights)
-                newBB[p,:] += point
 
-            for p in range(len(relatedJunList),len(relatedJunList)*2):
-                relatedJuns = relatedJunList[p-len(relatedJunList)]
+            for p in range(len(relatedBoneList),len(relatedBoneList)*2):
+                relatedBones = relatedBoneList[p-len(relatedBoneList)]
                 point = BB[bp][p]
+                pt = np.array([0.,0.,0.,1.])
+                pt[0:3] = BB[bp][p]
                 weights = []
-                for r in range(len(relatedJuns)):
-                    relatedJun = relatedJuns[r]
-                    weights.append(np.linalg.norm(prevPos[relatedJun]-point))
-                    newBB[p,:] += weights[r]*(curPos[relatedJun]-prevPos[relatedJun])
+                for r in range(len(relatedBones)):
+                    relatedBone = relatedBones[r]
+                    bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
+                    weights.append(1/np.linalg.norm(bonecenter-point))
+                    newBB[p,:] += weights[r]*np.dot(self.boneTrans[relatedBone], pt.T)[0:3]
                 newBB[p,:] /= sum(weights)
-                newBB[p,:] += point
                 
             newBBs.append(newBB)
         return newBBs
+
+    def GetVBonesTrans(self, skeVtx_cur, skeVtx_prev, newRGBD):
+        """
+        Get transform matrix of bone from previous to current frame
+        :param skeVtx_cur: the skeleton Vtx in current frame
+        :param skeVtx_prev: the skeleton Vtx in previous frame
+        :return: calculated SkeVtx
+        """
+        bonelist = [[5,6],[4,5],[20,4],[9,10],[8,9],[20,8], \
+        [13,14],[12,13],[0,12],[17,18],[16,17],[0,16], \
+        [20,2],[2,3],[20,1],[0,1]]
+
+        # test
+        Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+        a1 = newRGBD.depth_image.astype(np.double)/10
+        a2 = newRGBD.depth_image.astype(np.double)/10
+        a3 = newRGBD.depth_image.astype(np.double)/10
+
+        self.boneTrans = np.zeros((16, 4, 4))
+        tempSkeVtx = copy.deepcopy(skeVtx_prev)
+        for bIdx in range(len(bonelist)):
+            bone = bonelist[bIdx]
+            v1 = skeVtx_cur[bone[1]]-skeVtx_cur[bone[0]]
+            v2 = skeVtx_prev[bone[1]]-skeVtx_prev[bone[0]]
+            T = skeVtx_cur[bone[0]]/2+skeVtx_cur[bone[1]]/2-skeVtx_prev[bone[0]]/2-skeVtx_prev[bone[1]]/2
+            R = self.GetRotatefrom2Vector(v2, v1)
+            R_T = np.identity(4)
+            R_T[0:3,0:3] = R
+            T_T = np.identity(4)
+            T_T1 = np.identity(4)
+            T_T[0:3, 3] = -skeVtx_prev[bone[0]]
+            T_T1[0:3, 3] = skeVtx_prev[bone[0]]
+            T_T2 = np.identity(4)
+            T_T2[0:3, 3] = T
+            self.boneTrans[bIdx] = np.identity(4)
+            self.boneTrans[bIdx] = np.dot(T_T2, np.dot(T_T1, np.dot(R_T, T_T)))
+            
+            #update skeleton Vtx
+            pt = np.array([0.,0.,0.,1.])
+            pt[0:3] = skeVtx_prev[bone[0]]
+            if tempSkeVtx[bone[0]][0]!=skeVtx_prev[bone[0]][0]:
+                tempSkeVtx[bone[0]] += np.dot(self.boneTrans[bIdx,:,:], pt.T)[0:3]
+                tempSkeVtx[bone[0]] /=2
+            else:
+                tempSkeVtx[bone[0]] = np.dot(self.boneTrans[bIdx,:,:], pt.T)[0:3]
+            pt[0:3] = skeVtx_prev[bone[1]]
+            if tempSkeVtx[bone[1]][0]!=skeVtx_prev[bone[1]][0]:
+                tempSkeVtx[bone[1]] += np.dot(self.boneTrans[bIdx,:,:], pt.T)[0:3]    
+                tempSkeVtx[bone[1]] /=2
+            else:
+                tempSkeVtx[bone[1]] = np.dot(self.boneTrans[bIdx,:,:], pt.T)[0:3]
+
+            # test
+            #print 
+            '''
+            print bIdx
+            print skeVtx_cur[bone[0]]
+            print skeVtx_cur[bone[1]]
+            print skeVtx_prev[bone[0]]
+            print skeVtx_prev[bone[1]]
+            print v1 
+            print v2
+            '''
+            #draw
+            #origin
+            p0 = newRGBD.GetProjPts2D_optimize([skeVtx_cur[bone[0]]], Id4).astype(np.int16)
+            p0 = p0[0]
+            p1 = newRGBD.GetProjPts2D_optimize([skeVtx_cur[bone[1]]], Id4).astype(np.int16)
+            p1 = p1[0]
+            rr,cc,val = line_aa(int(p0[1]), int(p0[0]), int(p1[1]), int(p1[0]))
+            a1[rr,cc] = 1.0
+            cv2.imshow("cur",a1)
+            #origin pre
+            p0 = newRGBD.GetProjPts2D_optimize([skeVtx_prev[bone[0]]], Id4).astype(np.int16)
+            p0 = p0[0]
+            p1 = newRGBD.GetProjPts2D_optimize([skeVtx_prev[bone[1]]], Id4).astype(np.int16)
+            p1 = p1[0]
+            rr,cc,val = line_aa(int(p0[1]), int(p0[0]), int(p1[1]), int(p1[0]))
+            a3[rr,cc] = 1.0
+            cv2.imshow("pre",a3)
+            #new
+            p0 = newRGBD.GetProjPts2D_optimize([tempSkeVtx[bone[0]]], Id4).astype(np.int16)
+            p0 = p0[0]
+            p1 = newRGBD.GetProjPts2D_optimize([tempSkeVtx[bone[1]]], Id4).astype(np.int16)
+            p1 = p1[0]
+            rr,cc,val = line_aa(int(p0[1]), int(p0[0]), int(p1[1]), int(p1[0]))
+            rr = np.maximum(0,np.minimum(rr, 424-1))
+            cc = np.maximum(0,np.minimum(cc, 512-1))
+            a2[rr,cc] = 1.0
+            cv2.imshow("prev->cur",a2)
+        cv2.waitKey(1)
+        
+        return tempSkeVtx
+
+
 
     def GetSkeTransfo(self, pos2d,cur,prev,RGBD ,pRGBD, nRGBD, bp, pose):
         """
