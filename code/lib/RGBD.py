@@ -15,6 +15,7 @@ import pdb
 from skimage import img_as_ubyte
 from sklearn.decomposition import PCA
 import copy
+from skimage.draw import line_aa
 
 segm = imp.load_source('segmentation', './lib/segmentation.py')
 General = imp.load_source('General', './lib/General.py')
@@ -524,14 +525,53 @@ class RGBD():
     def BodyLabelling(self):
         '''Create label for each body part in the depth_image'''
         Size = self.depth_image.shape
-        self.labels = np.zeros(Size,np.int)   
+        self.labels = np.zeros(Size,np.int)
+        self.labelList = np.zeros((self.bdyPart.shape[0]+1, Size[0], Size[1]),np.int)
         Txy = self.transCrop
         for i in range(self.bdyPart.shape[0]): 
-            self.labels[Txy[1]:Txy[3],Txy[0]:Txy[2]] += (i+1)*self.bdyPart[i]
+            self.labels[Txy[1]:Txy[3],Txy[0]:Txy[2]] += (i+1)*self.bdyPart[i]            
+            self.labelList[i+1, Txy[1]:Txy[3],Txy[0]:Txy[2]] += (self.bdyPart[i] + self.overlapmap[i])
+            self.labelList[i+1] = (self.labelList[i+1]>0)
             # if some parts overlay, the number of this part will bigger
             overlap = np.where(self.labels > (i+1) )
             #put the overlapping part in the following body part
             self.labels[overlap] = i+1
+
+    def AddOverlap(self):
+        """
+        add overlap region to each body part
+        """
+        interLineList = copy.deepcopy([\
+        [[self.segm.foreArmPtsL[0], self.segm.foreArmPtsL[1]], [self.segm.foreArmPtsL[2], self.segm.foreArmPtsL[3]]], \
+        [[self.segm.upperArmPtsL[0], self.segm.upperArmPtsL[3]], [self.segm.upperArmPtsL[1], self.segm.upperArmPtsL[2]]], \
+        [[self.segm.foreArmPtsR[0], self.segm.foreArmPtsR[1]], [self.segm.foreArmPtsR[2], self.segm.foreArmPtsR[3]]], \
+        [[self.segm.upperArmPtsR[0], self.segm.upperArmPtsR[3]], [self.segm.upperArmPtsR[2], self.segm.upperArmPtsR[1]]], \
+        [[self.segm.thighPtsR[0], self.segm.thighPtsR[1]], [self.segm.thighPtsR[2], self.segm.thighPtsR[3]]], \
+        [[self.segm.calfPtsR[0], self.segm.calfPtsR[1]], [self.segm.calfPtsR[2], self.segm.calfPtsR[3]]],
+        [[self.segm.thighPtsL[0],  self.segm.thighPtsL[1]], [self.segm.thighPtsL[2],self.segm.thighPtsL[3]]], \
+        [[self.segm.calfPtsL[0], self.segm.calfPtsL[1]], [self.segm.calfPtsL[2], self.segm.calfPtsL[3]]], \
+        [[self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy()]], \
+        [[self.segm.upperArmPtsL[2], self.segm.upperArmPtsL[1]], [self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy()], [self.segm.upperArmPtsR[1], self.segm.upperArmPtsR[2]], [self.segm.thighPtsR[1], self.segm.thighPtsR[0]], [self.segm.thighPtsR[0], self.segm.thighPtsL[1]]], \
+        [[self.segm.foreArmPtsR[3], self.segm.foreArmPtsR[2]]], \
+        [[self.segm.foreArmPtsL[3], self.segm.foreArmPtsL[2]]], \
+        [[self.segm.calfPtsL[1], self.segm.calfPtsL[0]]], \
+        [[self.segm.calfPtsR[1], self.segm.calfPtsR[0]]], \
+        ])
+        self.overlapmap = np.zeros((14, self.CroppedBox.shape[0], self.CroppedBox.shape[1]), np.int)
+        a = np.zeros((self.CroppedBox.shape[0], self.CroppedBox.shape[1]), np.int)
+        for i in range(len(interLineList)):
+            interLines = interLineList[i]
+            for j in range(len(interLines)):
+                interPoints = interLines[j]
+                rr,cc,val = line_aa(int(interPoints[0][1]), int(interPoints[0][0]), int(interPoints[1][1]), int(interPoints[1][0]))
+                self.overlapmap[i, rr, cc]=2
+            '''    
+            Txy = self.transCrop
+            a += self.overlapmap[i]
+            a += self.bdyPart[i]
+        cv2.imshow("", a.astype(np.double)/2)
+        cv2.waitKey()
+        '''
 
     def RGBDSegmentation(self):
         """
@@ -540,6 +580,7 @@ class RGBD():
         """
         self.Crop2Body()
         self.BodySegmentation()
+        self.AddOverlap()
         self.BodyLabelling()
 
     def BodyReSegmentation(self):
@@ -645,6 +686,7 @@ class RGBD():
         :return: none
         """
         self.BodyReSegmentation()
+        self.AddOverlap()
         self.BodyLabelling()
 
 #######################################################################
@@ -987,7 +1029,7 @@ class RGBD():
             for p in range(len(points)):
                 # get depth
                 if (bp==11 or bp==12 or bp==13 or bp==14) and (p==2 or p==3):
-                    point2d = interPointList2D[bp][p-2]
+                    point2d = interPointList2D[bp][3-p]
                 else:
                     point2d = interPointList2D[bp][p]
                 if (bp==6 or bp==8 or bp==13 or bp==14) and (p==0 or p==1):
