@@ -13,7 +13,6 @@ from numpy import linalg as LA
 import imp    
 from skimage.draw import line_aa
 import copy
-#from pyquaternion import Quaternion
 PI = math.pi
 
 General = imp.load_source('General', './lib/General.py')
@@ -82,31 +81,7 @@ class Stitch():
 
         newVtx = np.zeros((Vtx.shape[0], 4))
         weights = np.zeros((Vtx.shape[0], coordGbl.shape[0]), dtype=np.double)
-        
-        '''
-        Tr = np.identity(4)
-        QArray = np.zeros((coordGbl.shape[0],4), dtype = np.double)
-        TrlaArray = np.zeros((coordGbl.shape[0],3), dtype = np.double)
-        for i in range(coordGbl.shape[0]):
-            QArray[i] = Quaternion(matrix=BBTrans[i, 0:3, 0:3]).elements
-            TrlaArray[i] = BBTrans[i, 0:3, 3]
-        Qsun = np.zeros((np.size(Vtx, 0),4), dtype=np.double)
-        Trlasum = np.zeros((np.size(Vtx, 0),3), dtype=np.double)
 
-        for i in range(coordGbl.shape[0]):
-            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
-            Qsun += QArray[i,:].reshape((1,4))*weights[:,i].reshape((weights.shape[0], 1))
-            Trlasum += TrlaArray[i,:].reshape((1,3))*weights[:,i].reshape((weights.shape[0], 1))
-
-        Qsun /= np.sum(weights, axis=1).reshape((weights.shape[0], 1))
-        Trlasum /= np.sum(weights, axis=1).reshape((weights.shape[0], 1))
-        for i in range(Qsun.shape[0]):
-            tempQ = Quaternion(Qsun[i,:])
-            Tr[0:3, 0:3] = tempQ.rotation_matrix
-            Tr[0:3,3] = Trlasum[i,:]
-            Tr[3,3] = 1
-            newVtx[i,:] = np.dot(Tr, pt[i,:].T)
-        #'''
         for i in range(coordGbl.shape[0]):
             weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
             Pose = BBTrans[i]
@@ -119,7 +94,7 @@ class Stitch():
         newVtx[:,1] /= np.sum(weights, axis=1)
         newVtx[:,2] /= np.sum(weights, axis=1)
         newVtx[:,3] /= np.sum(weights, axis=1)
-        #'''
+
         return newVtx[:,0:3]
         
     def TransformNmls(self, Nmls,Pose, s):
@@ -253,21 +228,11 @@ class Stitch():
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
-                #tempTranslate = np.zeros(3, self.boneTrans[0].dtype)
-                #tempQ = Quaternion()
-                #tempQ[0] = 0
                 for r in range(len(relatedBones)):
                     relatedBone = relatedBones[r]
                     bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
                     weights.append(1/np.linalg.norm(bonecenter-point))
-                    #tempTranslate += weights[r]*self.boneTrans[relatedBone][0:3,3]
-                    #tempQ += weights[r]*Quaternion(matrix=self.boneTrans[relatedBone][0:3,0:3])
                     newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
-                #tempTranslate /= sum(weights)
-                #tempQ /= sum(weights)
-                #newBBTran[p, 0:3,3] = tempTranslate
-                #newBBTran[p, 0:3,0:3] = tempQ.rotation_matrix
-                #newBBTran[p,3,3] = 1
                 newBBTran[p] /= sum(weights)
                 newBB[p,:] = np.dot(newBBTran[p,:,:], pt.T)[0:3]
                 newBBTran[p, :, :] = np.dot(newBBTran[p,:,:], BBTrans[bp][p,:,:])
@@ -277,21 +242,11 @@ class Stitch():
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
-                #tempTranslate = np.zeros(3, self.boneTrans[0].dtype)
-                #tempQ = Quaternion(matrix=np.identity(3))
-                #tempQ[0] = 0
                 for r in range(len(relatedBones)):
                     relatedBone = relatedBones[r]
                     bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
                     weights.append(1/np.linalg.norm(bonecenter-point))
-                    #tempTranslate += weights[r]*self.boneTrans[relatedBone][0:3,3]
-                    #tempQ += weights[r]*Quaternion(matrix=self.boneTrans[relatedBone][0:3,0:3])
                     newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
-                #tempTranslate /= sum(weights)
-                #tempQ /= sum(weights)
-                #newBBTran[p, 0:3,3] = tempTranslate
-                #newBBTran[p, 0:3,0:3] = tempQ.rotation_matrix
-                #newBBTran[p,3,3] = 1
                 newBBTran[p] /= sum(weights)
                 newBB[p,:] = np.dot(newBBTran[p,:,:], pt.T)[0:3]
                 newBBTran[p, :, :] = np.dot(newBBTran[p,:,:], BBTrans[bp][p,:,:])
