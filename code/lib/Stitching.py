@@ -13,6 +13,7 @@ from numpy import linalg as LA
 import imp    
 from skimage.draw import line_aa
 import copy
+#from pyquaternion import Quaternion
 PI = math.pi
 
 General = imp.load_source('General', './lib/General.py')
@@ -31,14 +32,16 @@ class Stitch():
         self.StitchedFaces = 0
         self.StitchedNormales = 0
 
-    def NaiveStitch(self, PartVtx,PartNmls,PartFaces,PoseBP):
+    def NaiveStitch(self, PartVtx,PartNmls,PartFaces, Tg, coordGbl_pre=np.zeros(0), BBTrans=np.zeros(0)):
         """
         Add the vertices and faces of each body parts
         together after transforming them in the global coordinates system
         :param PartVtx: List of vertices for a body parts
         :param PartNmls: List of normales for a body parts
         :param PartFaces:  List of faces for a body parts
-        :param PoseBP: local to global transform
+        :param Tg:  local to global transform
+        :param coordsGbl_pre: the corners of bounding-box in global coord
+        :param BBTrans: the transform matrix of each corners in global bounding-box
         :return: none
         """
         #Initialize values from the list of
@@ -47,8 +50,8 @@ class Stitch():
         ConcatNmls = self.StitchedNormales
 
         # tranform the vertices in the global coordinates system
-        PartVertices = self.TransformVtx(PartVtx,PoseBP,1)
-        PartNormales = self.TransformNmls(PartNmls,PoseBP,1)
+        PartVertices = self.TransformVtx(PartVtx,Tg, coordGbl_pre, BBTrans, 1)
+        PartNormales = self.TransformNmls(PartNmls,Tg,1)
         PartFacets = PartFaces + np.max(ConcatFaces)+1
 
         # concatenation
@@ -58,19 +61,66 @@ class Stitch():
         
 
         
-    def TransformVtx(self, Vtx,Pose, s):
+    def TransformVtx(self, Vtx, Tg, coordGbl=np.zeros(0), BBTrans=np.zeros(0), s=1):
         """
         Transform the vertices in a system to another system.
         Here it will be mostly used to transform from local system to global coordiantes system
         :param Vtx: List of vertices
-        :param Pose:  local to global transform
+        :param Tg:  local to global transform
+        :param coordsGbl: the corners of bounding-box in global coord
+        :param coordsGblTrans: the transform matrix of each corners in global bounding-box
         :param s: subsampling factor
         :return: list of transformed vertices
         """
         stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
-        Vtx = np.dot(pt,Pose.T)
-        return Vtx[:,0:3]
+        pt = np.dot(pt, Tg.T)
+        Vtx = pt[:,0:3]
+        
+        if coordGbl.shape[0]==0:
+            return Vtx
+
+        newVtx = np.zeros((Vtx.shape[0], 4))
+        weights = np.zeros((Vtx.shape[0], coordGbl.shape[0]), dtype=np.double)
+        
+        '''
+        Tr = np.identity(4)
+        QArray = np.zeros((coordGbl.shape[0],4), dtype = np.double)
+        TrlaArray = np.zeros((coordGbl.shape[0],3), dtype = np.double)
+        for i in range(coordGbl.shape[0]):
+            QArray[i] = Quaternion(matrix=BBTrans[i, 0:3, 0:3]).elements
+            TrlaArray[i] = BBTrans[i, 0:3, 3]
+        Qsun = np.zeros((np.size(Vtx, 0),4), dtype=np.double)
+        Trlasum = np.zeros((np.size(Vtx, 0),3), dtype=np.double)
+
+        for i in range(coordGbl.shape[0]):
+            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
+            Qsun += QArray[i,:].reshape((1,4))*weights[:,i].reshape((weights.shape[0], 1))
+            Trlasum += TrlaArray[i,:].reshape((1,3))*weights[:,i].reshape((weights.shape[0], 1))
+
+        Qsun /= np.sum(weights, axis=1).reshape((weights.shape[0], 1))
+        Trlasum /= np.sum(weights, axis=1).reshape((weights.shape[0], 1))
+        for i in range(Qsun.shape[0]):
+            tempQ = Quaternion(Qsun[i,:])
+            Tr[0:3, 0:3] = tempQ.rotation_matrix
+            Tr[0:3,3] = Trlasum[i,:]
+            Tr[3,3] = 1
+            newVtx[i,:] = np.dot(Tr, pt[i,:].T)
+        #'''
+        for i in range(coordGbl.shape[0]):
+            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
+            Pose = BBTrans[i]
+            newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]
+            newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]
+            newVtx[:,2] += np.dot(pt,Pose.T)[:,2]*weights[:,i]
+            newVtx[:,3] += np.dot(pt,Pose.T)[:,3]*weights[:,i]
+
+        newVtx[:,0] /= np.sum(weights, axis=1)
+        newVtx[:,1] /= np.sum(weights, axis=1)
+        newVtx[:,2] /= np.sum(weights, axis=1)
+        newVtx[:,3] /= np.sum(weights, axis=1)
+        #'''
+        return newVtx[:,0:3]
         
     def TransformNmls(self, Nmls,Pose, s):
         """
@@ -154,13 +204,13 @@ class Stitch():
             #Tg[bp][0:3, 3] = ctr
             print RotZ
 
-    def TransfoBB(self, curPos, prevPos, BB):
+    def TransfoBBcorners(self, prevPos, BB, BBTrans):
         """
         Transform the corners of bounding-boxes according to the position of the skeleton
-        :param curPos: position in 3D of the junctions
         :param prevPos: position in 3D of the junctions
-        :param BB: the global bounding-boxes
-        :return: the new bounding-boxes in global
+        :param BB: the global bounding-boxes in previous frame
+        :param BBTrans: the transform matrix of  bounding-boxes in previous frame
+        :return: the new bounding-boxes in global and the transform matrix of bounding-boxes
         """
         '''
         AllrelatedJun = [ [],\
@@ -191,37 +241,63 @@ class Stitch():
 
         newBBs=[]
         newBBs.append(np.array((0,0,0)))
+        newBBTrans = []
+        newBBTrans.append(np.identity(4))
         for bp in range(1,len(AllrelatedBone)):
             relatedBoneList = AllrelatedBone[bp]
             newBB = np.zeros((len(BB[bp]),3))
+            newBBTran = np.zeros((len(BB[bp]),4,4))
             for p in range(len(relatedBoneList)):
                 relatedBones = relatedBoneList[p]
                 point = BB[bp][p]
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
+                #tempTranslate = np.zeros(3, self.boneTrans[0].dtype)
+                #tempQ = Quaternion()
+                #tempQ[0] = 0
                 for r in range(len(relatedBones)):
                     relatedBone = relatedBones[r]
                     bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
                     weights.append(1/np.linalg.norm(bonecenter-point))
-                    newBB[p,:] += weights[r]*np.dot(self.boneTrans[relatedBone], pt.T)[0:3]
-                newBB[p,:] /= sum(weights)
-
+                    #tempTranslate += weights[r]*self.boneTrans[relatedBone][0:3,3]
+                    #tempQ += weights[r]*Quaternion(matrix=self.boneTrans[relatedBone][0:3,0:3])
+                    newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
+                #tempTranslate /= sum(weights)
+                #tempQ /= sum(weights)
+                #newBBTran[p, 0:3,3] = tempTranslate
+                #newBBTran[p, 0:3,0:3] = tempQ.rotation_matrix
+                #newBBTran[p,3,3] = 1
+                newBBTran[p] /= sum(weights)
+                newBB[p,:] = np.dot(newBBTran[p,:,:], pt.T)[0:3]
+                newBBTran[p, :, :] = np.dot(newBBTran[p,:,:], BBTrans[bp][p,:,:])
             for p in range(len(relatedBoneList),len(relatedBoneList)*2):
                 relatedBones = relatedBoneList[p-len(relatedBoneList)]
                 point = BB[bp][p]
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
+                #tempTranslate = np.zeros(3, self.boneTrans[0].dtype)
+                #tempQ = Quaternion(matrix=np.identity(3))
+                #tempQ[0] = 0
                 for r in range(len(relatedBones)):
                     relatedBone = relatedBones[r]
                     bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
                     weights.append(1/np.linalg.norm(bonecenter-point))
-                    newBB[p,:] += weights[r]*np.dot(self.boneTrans[relatedBone], pt.T)[0:3]
-                newBB[p,:] /= sum(weights)
-                
+                    #tempTranslate += weights[r]*self.boneTrans[relatedBone][0:3,3]
+                    #tempQ += weights[r]*Quaternion(matrix=self.boneTrans[relatedBone][0:3,0:3])
+                    newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
+                #tempTranslate /= sum(weights)
+                #tempQ /= sum(weights)
+                #newBBTran[p, 0:3,3] = tempTranslate
+                #newBBTran[p, 0:3,0:3] = tempQ.rotation_matrix
+                #newBBTran[p,3,3] = 1
+                newBBTran[p] /= sum(weights)
+                newBB[p,:] = np.dot(newBBTran[p,:,:], pt.T)[0:3]
+                newBBTran[p, :, :] = np.dot(newBBTran[p,:,:], BBTrans[bp][p,:,:])
             newBBs.append(newBB)
-        return newBBs
+            newBBTrans.append(newBBTran)
+        return newBBs, newBBTrans
 
     def GetVBonesTrans(self, skeVtx_cur, skeVtx_prev, newRGBD):
         """
@@ -285,6 +361,7 @@ class Stitch():
             print v1 
             print v2
             '''
+            '''
             #draw
             #origin
             p0 = newRGBD.GetProjPts2D_optimize([skeVtx_cur[bone[0]]], Id4).astype(np.int16)
@@ -314,6 +391,7 @@ class Stitch():
             cv2.imshow("prev->cur",a2)
         cv2.waitKey(1)
         
+        '''
         return tempSkeVtx
 
 
@@ -387,17 +465,13 @@ class Stitch():
         :param b: end vector
         :return: Rotation Matrix
         '''
-
-        x = np.cross(a,b)/LA.norm(np.cross(a,b))
-        theta = np.arccos(np.dot(a,b)/np.dot(LA.norm(a),LA.norm(b)))
-        Ax = np.array([[0., -x[2], -x[1]], [x[2], 0., -x[0]], [-x[1], x[0], 0.]])
+        a = a/LA.norm(a)
+        b = b/LA.norm(b)
+        v = np.cross(a,b)
+        c = np.dot(a,b)
+        Av = np.array([[0., -v[2], v[1]],[v[2], 0., -v[0]],[-v[1], v[0], 0.]]) 
         R = np.identity(3)
-        R += np.sin(theta)*Ax + (1-np.cos(theta))*np.dot(Ax,Ax)
-        
-        if(theta*180<5):
-            print "angle too small"
-        if(180-theta*180<5):
-            print "angle closes 180"
+        R += Av + 1/(1+c)*np.dot(Av,Av)
         
         return R
 
