@@ -14,11 +14,38 @@ __kernel void Test(__global float *TSDF) {
         TSDF[x + 512*y + 512*512*z] = 1.0f;
 }
 """
+
+Kernel_ComputeCornerWeights="""
+__kernel void ComputeCornerWeights(__global float *BBweight, __constant float *coords, const int BBNum, __constant int *Dim){
+    
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    int z = get_global_id(2);
+    int idx = BBNum*z + BBNum*Dim[2]*y + BBNum*Dim[2]*Dim[1]*x;
+
+    int c;
+    float sumw = 0;
+    for(c=0; c<BBNum; c++){
+        float dis=0;
+        dis += (x-coords[0+c*3])*(x-coords[0+c*3]);
+        dis += (y-coords[1+c*3])*(y-coords[1+c*3]);
+        dis += (z-coords[2+c*3])*(z-coords[2+c*3]);
+        sumw += 1/dis;
+        BBweight[idx+c] = 1/dis;
+    }
+    for(c=0; c<BBNum; c++){
+        BBweight[idx+c] /= sumw;
+    }
+}
+"""
+
 #__global float *prevTSDF, __global float *Weight
 #__read_only image2d_t VMap
 Kernel_FuseTSDF = """
 __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __constant float *Param, __constant int *Dim,
-                           __constant float *Pose, __constant float *calib, const int n_row, const int m_col,
+                           __constant float *Pose, 
+                           //__constant float *BBweight, __constant float *BBTrans, const int BBNum,
+                           __constant float *calib, const int n_row, const int m_col,
                            __global short int *Weight) {
         //const sampler_t smp =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
 
@@ -43,22 +70,35 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
         float convVal = 32767.0f;
         int z ;
         for ( z = 0; z < Dim[2]; z++) { /*depth*/
+            // On the GPU all pixel are stocked in a 1D array
+            int idx = z + Dim[2]*y + Dim[2]*Dim[1]*x;
+
             // Transform voxel coordinates into 3D point coordinates
             // Param = [c_x, dim_x, c_y, dim_y, c_z, dim_z]
             pt.z = ((float)(z)-Param[4])/Param[5];          
             
             // Transfom the voxel into the Image coordinate space
+            //transform form local to global
             pt_T.x = x_T + Pose[2]*pt.z; //Pose is column major
             pt_T.y = y_T + Pose[6]*pt.z;
             pt_T.z = z_T + Pose[10]*pt.z;
-                     
-                   
+            /*
+            //transform from first frame to current frame according interploation
+            int BBc, Trc;
+            float Tr[16]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+            for( BBc=0; BBc<BBNum; BBc++){
+                for (Trc=0; Trc<12; Trc++){
+                    Tr[Trc]+=BBweight[BBc+idx*BBNum]*BBTrans[Trc+16*BBc];
+                }
+            }
+            pt=pt_T;
+            pt_T.x =  Tr[0]*pt.x + Tr[1]*pt.y + Tr[2]*pt.z + Tr[3];
+            pt_T.y =  Tr[4]*pt.x + Tr[5]*pt.y + Tr[6]*pt.z + Tr[7];
+            pt_T.z =  Tr[8]*pt.x + Tr[9]*pt.y + Tr[10]*pt.z + Tr[11];
+            */
             // Project onto Image
             pix.x = convert_int(round((pt_T.x/fabs(pt_T.z))*calib[0] + calib[2])); 
             pix.y = convert_int(round((pt_T.y/fabs(pt_T.z))*calib[4] + calib[5])); 
-            
-            // On the GPU all pixel are stocked in a 1D array
-            int idx = z + Dim[2]*y + Dim[2]*Dim[1]*x;
             
             // Check if the pixel is in the frame
             if (pix.x < 0 || pix.x > m_col-1 || pix.y < 0 || pix.y > n_row-1){

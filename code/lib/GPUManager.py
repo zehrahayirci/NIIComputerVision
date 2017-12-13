@@ -73,4 +73,5 @@ class GPUManager():
         """
         self.programs['FuseTSDF'] = cl.Program(self.context, KernelsOpenCL.Kernel_FuseTSDF).build()
         self.programs['Test'] = cl.Program(self.context, KernelsOpenCL.Kernel_Test).build()
+        self.programs['ComputeCornerWeights'] = cl.Program(self.context, KernelsOpenCL.Kernel_ComputeCornerWeights).build()
 
