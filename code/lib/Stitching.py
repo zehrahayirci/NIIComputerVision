@@ -50,7 +50,7 @@ class Stitch():
 
         # tranform the vertices in the global coordinates system
         PartVertices = self.TransformVtx(PartVtx,Tg, coordGbl_pre, BBTrans, 1)
-        PartNormales = self.TransformNmls(PartNmls,Tg,1)
+        PartNormales = self.TransformNmls(PartNmls,PartVtx, Tg, coordGbl_pre, BBTrans, 1)
         PartFacets = PartFaces + np.max(ConcatFaces)+1
 
         # concatenation
@@ -97,17 +97,42 @@ class Stitch():
 
         return newVtx[:,0:3]
         
-    def TransformNmls(self, Nmls,Pose, s):
+    def TransformNmls(self, Nmls, Vtx, Tg, coordGbl=np.zeros(0), BBTrans=np.zeros(0), s=1):
         """
         Transform the normales in a system to another system.
         Here it will be mostly used to transform from local system to global coordiantes system
         :param Nmls:  List of normales
-        :param Pose: local to global transform
+        :param Vtx: List of vertices
+        :param Tg:  local to global transform
+        :param coordsGbl: the corners of bounding-box in global coord
+        :param coordsGblTrans: the transform matrix of each corners in global bounding-box
         :param s: subsampling factor
         :return: list of transformed normales
         """
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
-        nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Pose[0:3,0:3].T)
+        nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Tg[0:3,0:3].T)
+        stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+        pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
+        pt = np.dot(pt, Tg.T)
+        Vtx = pt[:,0:3]
+
+        if coordGbl.shape[0]==0:
+            return nmle
+        
+        weights = np.zeros((Nmls.shape[0], coordGbl.shape[0]), dtype=np.double)
+        newnmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
+
+        for i in range(coordGbl.shape[0]):
+            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
+            Pose = BBTrans[i]
+            newnmle[:,0] += np.dot(nmle,Pose[0:3,0:3].T)[:,0]*weights[:,i]
+            newnmle[:,1] += np.dot(nmle,Pose[0:3,0:3].T)[:,1]*weights[:,i]
+            newnmle[:,2] += np.dot(nmle,Pose[0:3,0:3].T)[:,2]*weights[:,i]
+
+        newnmle[:,0] /= np.sum(weights, axis=1)
+        newnmle[:,1] /= np.sum(weights, axis=1)
+        newnmle[:,2] /= np.sum(weights, axis=1)
+
         return nmle
 
     def RArmsTransform(self, angle,bp, pos2d,RGBD,Tg):

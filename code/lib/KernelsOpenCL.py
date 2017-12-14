@@ -19,7 +19,7 @@ __kernel void Test(__global float *TSDF) {
 Kernel_FuseTSDF = """
 __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __constant float *Param, __constant int *Dim,
                            __constant float *Pose, 
-                           __constant float *BBTrans, const int BBNum, __constant float *coords, __global float *tempPose,  
+                           __constant float *BBTrans, const int BBNum, __constant float *coords, 
                            __constant float *calib, const int n_row, const int m_col, __global short int *Weight) {
         //const sampler_t smp =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
 
@@ -58,14 +58,13 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
             pt_T.z = z_T + Pose[10]*pt.z;
             //transform from first frame to current frame according interploation
             int BBc, Trc;
-            float weight, tempweight;
+            float weight;
             float Tr[16]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
             float sumweight = 0;
             for( BBc=0; BBc<BBNum; BBc++){
                 weight = pow(pt.x-coords[0+BBc*3],2);
                 weight += pow(pt.y-coords[1+BBc*3],2);
                 weight += pow(pt.z-coords[2+BBc*3],2);
-                tempweight = weight;
                 weight = 1/pow(weight,0.5);
                 sumweight += weight;
                 for (Trc=0; Trc<12; Trc++){
@@ -79,13 +78,6 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
             pt_T.x =  Tr[0]*pt.x + Tr[1]*pt.y + Tr[2]*pt.z + Tr[3];
             pt_T.y =  Tr[4]*pt.x + Tr[5]*pt.y + Tr[6]*pt.z + Tr[7];
             pt_T.z =  Tr[8]*pt.x + Tr[9]*pt.y + Tr[10]*pt.z + Tr[11];
-
-            if(x==0 && y==0 && z==0){
-                int temp;
-                for(temp=0; temp<16; temp++){
-                    tempPose[temp] = Tr[temp];
-                }
-            }
 
             // Project onto Image
             pix.x = convert_int(round((pt_T.x/fabs(pt_T.z))*calib[0] + calib[2])); 

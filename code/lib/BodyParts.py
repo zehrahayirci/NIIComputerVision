@@ -69,8 +69,8 @@ class BodyParts():
                 PoseBP[i][j] = self.Tlg[i][j]
 
         # TSDF Fusion of the body part
-        self.TSDFManager = TSDFtk.TSDFManager((X, Y, Z), self.RGBD_BP, self.GPUManager, self.RGBD.coordsL[bp])
-        self.TSDFManager.FuseRGBD_GPU(self.RGBD_BP, PoseBP, self.RGBD.BBTrans[bp])
+        self.TSDFManager = TSDFtk.TSDFManager((X, Y, Z), self.RGBD_BP, self.GPUManager, self.RGBD.coordsL[bp], PoseBP)
+        self.TSDFManager.FuseRGBD_GPU(self.RGBD_BP, self.RGBD.BBTrans[bp])
 
         # Create Mesh
         self.MC = My_MC.My_MarchingCube(self.TSDFManager.Size, self.TSDFManager.res, 0.0, self.GPUManager)

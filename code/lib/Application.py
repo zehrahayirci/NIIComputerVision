@@ -461,7 +461,7 @@ class Application(tk.Frame):
             # Concatenate all the body parts for stitching purpose
             if bp == bpstart :
                 StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp])
-                StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,PoseBP[bp],1)
+                StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices,PoseBP[bp])
                 StitchBdy.StitchedFaces = Parts[bp].MC.Faces
             else:
                 StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces,PoseBP[bp])
@@ -697,12 +697,12 @@ class Application(tk.Frame):
                         PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
 
                 # TSDF Fusion of the body part
-                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], PoseBP[bp])
+                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].BBTrans[bp])
 
                 # Create Mesh
-                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
+                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
@@ -711,7 +711,7 @@ class Application(tk.Frame):
                 # Stitch all the body parts
                 if bp ==1 :
                     StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices,Tg[bp], self.RGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp])
-                    StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Tg[bp],1)
+                    StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, Tg[bp], self.RGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp])
                     StitchBdy.StitchedFaces = Parts[bp].MC.Faces
                 else:
                     StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces,Tg[bp], self.RGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp])
