@@ -14,39 +14,13 @@ __kernel void Test(__global float *TSDF) {
         TSDF[x + 512*y + 512*512*z] = 1.0f;
 }
 """
-
-Kernel_ComputeCornerWeights="""
-__kernel void ComputeCornerWeights(__global float *BBweight, __constant float *coords, const int BBNum, __constant int *Dim){
-    
-    int x = get_global_id(0);
-    int y = get_global_id(1);
-    int z = get_global_id(2);
-    int idx = BBNum*z + BBNum*Dim[2]*y + BBNum*Dim[2]*Dim[1]*x;
-
-    int c;
-    float sumw = 0;
-    for(c=0; c<BBNum; c++){
-        float dis=0;
-        dis += (x-coords[0+c*3])*(x-coords[0+c*3]);
-        dis += (y-coords[1+c*3])*(y-coords[1+c*3]);
-        dis += (z-coords[2+c*3])*(z-coords[2+c*3]);
-        sumw += 1/dis;
-        BBweight[idx+c] = 1/dis;
-    }
-    for(c=0; c<BBNum; c++){
-        BBweight[idx+c] /= sumw;
-    }
-}
-"""
-
 #__global float *prevTSDF, __global float *Weight
 #__read_only image2d_t VMap
 Kernel_FuseTSDF = """
 __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __constant float *Param, __constant int *Dim,
                            __constant float *Pose, 
-                           //__constant float *BBweight, __constant float *BBTrans, const int BBNum,
-                           __constant float *calib, const int n_row, const int m_col,
-                           __global short int *Weight) {
+                           __constant float *BBTrans, const int BBNum, __constant float *coords, __global float *tempPose,  
+                           __constant float *calib, const int n_row, const int m_col, __global short int *Weight) {
         //const sampler_t smp =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
 
         const float nu = 0.05f;
@@ -82,20 +56,37 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
             pt_T.x = x_T + Pose[2]*pt.z; //Pose is column major
             pt_T.y = y_T + Pose[6]*pt.z;
             pt_T.z = z_T + Pose[10]*pt.z;
-            /*
             //transform from first frame to current frame according interploation
             int BBc, Trc;
+            float weight, tempweight;
             float Tr[16]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+            float sumweight = 0;
             for( BBc=0; BBc<BBNum; BBc++){
+                weight = pow(pt.x-coords[0+BBc*3],2);
+                weight += pow(pt.y-coords[1+BBc*3],2);
+                weight += pow(pt.z-coords[2+BBc*3],2);
+                tempweight = weight;
+                weight = 1/pow(weight,0.5);
+                sumweight += weight;
                 for (Trc=0; Trc<12; Trc++){
-                    Tr[Trc]+=BBweight[BBc+idx*BBNum]*BBTrans[Trc+16*BBc];
+                    Tr[Trc] += weight * BBTrans[Trc+16*BBc];
                 }
+            }
+            for (Trc=0; Trc<12; Trc++){
+                Tr[Trc] /= sumweight;
             }
             pt=pt_T;
             pt_T.x =  Tr[0]*pt.x + Tr[1]*pt.y + Tr[2]*pt.z + Tr[3];
             pt_T.y =  Tr[4]*pt.x + Tr[5]*pt.y + Tr[6]*pt.z + Tr[7];
             pt_T.z =  Tr[8]*pt.x + Tr[9]*pt.y + Tr[10]*pt.z + Tr[11];
-            */
+
+            if(x==0 && y==0 && z==0){
+                int temp;
+                for(temp=0; temp<16; temp++){
+                    tempPose[temp] = Tr[temp];
+                }
+            }
+
             // Project onto Image
             pix.x = convert_int(round((pt_T.x/fabs(pt_T.z))*calib[0] + calib[2])); 
             pix.y = convert_int(round((pt_T.y/fabs(pt_T.z))*calib[4] + calib[5])); 

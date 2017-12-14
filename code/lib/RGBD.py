@@ -1027,7 +1027,7 @@ class RGBD():
                 points.append(points[0]+vector+[-0.05,0,0])
 
             coordGbl =  np.zeros((len(points)*2,3))
-            BBTrans = np.zeros((len(points)*2,4,4))
+            BBTrans = np.zeros((len(points)*2,4,4), dtype=np.float32)
             # for each line of one body part
             for p in range(len(points)):
                 # get depth
@@ -1063,14 +1063,14 @@ class RGBD():
                 BBTrans[p+len(points)] = np.identity(4)
             self.coordsGbl.append(coordGbl)
             self.BBTrans.append(BBTrans)
-    
+        
         # update local coordinate
         self.coordsL = []
         self.coordsL.append([0.,0.,0.])
         self.BBsize = []
         self.BBsize.append([0.,0.,0.])
         for bp in range(1,15):
-            self.coordsL.append(self.pca[bp].transform(self.coordsGbl[bp]))
+            self.coordsL.append(self.pca[bp].transform(self.coordsGbl[bp]).astype(np.float32))
             minX = np.min(self.coordsL[bp][:,0]) 
             maxX = np.max(self.coordsL[bp][:,0])
             minY = np.min(self.coordsL[bp][:,1]) 

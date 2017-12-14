@@ -221,7 +221,7 @@ class Stitch():
         for bp in range(1,len(AllrelatedBone)):
             relatedBoneList = AllrelatedBone[bp]
             newBB = np.zeros((len(BB[bp]),3))
-            newBBTran = np.zeros((len(BB[bp]),4,4))
+            newBBTran = np.zeros((len(BB[bp]),4,4), dtype=np.float32)
             for p in range(len(relatedBoneList)):
                 relatedBones = relatedBoneList[p]
                 point = BB[bp][p]

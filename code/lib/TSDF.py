@@ -69,16 +69,11 @@ class TSDFManager():
         self.Pose_GPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, self.Pose.nbytes)
 
         # calculate the corner weight
-        self.BBweight = np.zeros((self.Size[0], self.Size[1], self.Size[2], coords.shape[0]), dtype=np.float32)
         self.BBNum = coords.shape[0]
-        self.BBweightGPU = cl.Buffer(self.GPUManager.context, mf.READ_WRITE, self.BBweight.nbytes)
         self.coordsGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=coords)
         self.BBTrans = np.zeros((coords.shape[0],4,4), dtype=np.float32)
         self.BBTransGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, self.BBTrans.nbytes)
-        self.GPUManager.programs['ComputeCornerWeights'].ComputeCornerWeights(self.GPUManager.queue, (self.Size[0], self.Size[1], self.Size[2]), None, \
-                                                        self.BBweightGPU, self.coordsGPU, np.int32(self.BBNum), self.Size_Volume)
-        #cl.enqueue_read_buffer(self.GPUManager.queue, self.BBweightGPU, self.BBweight).wait()
-        
+        self.tempGPU  = cl.Buffer(self.GPUManager.context, mf.READ_WRITE, self.Pose.nbytes)
 #######
 ##GPU code
 #####
@@ -95,15 +90,13 @@ class TSDFManager():
         # initialize buffers
         cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Tg)
         cl.enqueue_write_buffer(self.GPUManager.queue, self.DepthGPU, Image.depth_image)
-        BBTrans = BBTrans.astype(np.float32)
         cl.enqueue_write_buffer(self.GPUManager.queue, self.BBTransGPU, BBTrans)
 
         # fuse data of the RGBD imnage with the TSDF volume 3D model
         self.GPUManager.programs['FuseTSDF'].FuseTSDF(self.GPUManager.queue, (self.Size[0], self.Size[1]), None, \
                                 self.TSDFGPU, self.DepthGPU, self.Param, self.Size_Volume, self.Pose_GPU, \
-                                #self.BBweightGPU, self.BBTransGPU, np.int32(self.BBNum), 
-                                self.Calib_GPU, \
-                                np.int32(Image.Size[0]), np.int32(Image.Size[1]),self.WeightGPU)
+                                self.BBTransGPU, np.int32(self.BBNum), self.coordsGPU, self.tempGPU, \
+                                self.Calib_GPU, np.int32(Image.Size[0]), np.int32(Image.Size[1]),self.WeightGPU)
 
         # update CPU array. Read the buffer to write in the CPU array.
         cl.enqueue_read_buffer(self.GPUManager.queue, self.TSDFGPU, self.TSDF).wait()
@@ -113,7 +106,8 @@ class TSDFManager():
         print "TSDFNaN : %d" %(TSDFNaN)
         '''
         cl.enqueue_read_buffer(self.GPUManager.queue, self.WeightGPU, self.Weight).wait()  
-
+        cl.enqueue_read_buffer(self.GPUManager.queue, self.tempGPU, self.Pose).wait()
+        print self.Pose
 
     
 #####
