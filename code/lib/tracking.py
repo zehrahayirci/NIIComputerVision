@@ -640,6 +640,58 @@ class Tracker():
             return Pose
         
         return res        
+    
+    def RegisterBBMesh(self, coords, VtxList, depthImg, intrinsic, BBTrans_ori):
+        '''
+        refine the transform of corner of each body part by registering vertex with depth image
+        :param coords: contain all body RGBD
+        :param coords_pre: the position of corner in preframe
+        :param VtxList: vertices of each body part in global coordinate
+        :param depthImg: depth image
+        :param intrinsic: intrinsic matrix
+        :param BBTrans_ori: original Bounding-boxes transform matrix
+        :return coords and BBtrans
+        '''
+        # initial
+        BPlist = [12,1,2,11,3,4,13,8,7,14,6,5,9,10] #order
+        BBTrans = []
+        for bp in range(15):
+            BBTrans.append(np.zeros((coords[bp].shape[0], 4,4), dtype=np.float32))
+            BBTrans[bp][:,0,0] = 1
+            BBTrans[bp][:,1,1] = 1
+            BBTrans[bp][:,2,2] = 1
+            BBTrans[bp][:,3,3] = 1
+
+        # for each body part
+        for bp in BPlist:
+            print bp
+            coord = coords[bp]
+            Vtx = VtxList[bp]
+
+            #get weight
+            weights = np.zeros((Vtx.shape[0], coord.shape[0]), dtype=np.double)
+            for i in range(coord.shape[0]):
+                weights[:, i] = 1/LA.norm(Vtx-coord[i,:], axis=1)
+            weightsum = np.sum(weights, axis=1)
+
+            # energy function
+            #error=deformVtx_function(BBTrans[bp].reshape(coord.shape[0]*4*4), Vtx, weights, weightsum, depthImg, intrinsic)
+            #print error
+            res = sp.optimize.least_squares(deformVtx_function, BBTrans[bp].reshape(coord.shape[0]*4*4), max_nfev=100, args=(Vtx, weights, weightsum, depthImg, intrinsic))
+            print res
+            BBTrans[bp] = res.x.reshape((coord.shape[0],4,4))
+
+            # merge to BBTrans_ori and modified coords
+            for i in range(coord.shape[0]):
+                BBTrans_ori[bp][i,:,:] = np.dot(BBTrans[bp][i,:,:], BBTrans_ori[bp][i,:,:])
+                pt = np.array((0.,0.,0.,1.), dtype=np.float32)
+                pt[0:3] = coords[bp][i,:]
+                coords[bp][i,:] = np.dot(BBTrans[bp][i,:,:], pt.T).T[0:3]
+
+        return coords, BBTrans_ori
+            
+
+
 
     def RegisterBB(self, bb_cur, bb_prev):
         '''
@@ -906,3 +958,47 @@ def RegisterTs_function(Tr, initTr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, 
     term = term_data*0.001+term_smooth+term_cons
 
     return term
+
+def deformVtx_function(BBTrans_1D, Vtx, weights, weightsum, depthImg, intrinsic):
+    '''
+    :param BBTrans_1D: transform matrix of one bounding-box
+    :param Vtx: the vertice in global at first frame
+    :param weights: the weight of corners and vtx
+    :param weightsum:
+    :param depthImg: the depth Image
+    :param intrinsic: intrinsic matrix
+    '''
+    # 1D->3D
+    BBTrans = BBTrans_1D.reshape((BBTrans_1D.shape[0]/16,4,4))
+
+    # deform vtx
+    stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+    pt = np.stack( (Vtx[:,0],Vtx[:,1],Vtx[:,2],stack_pt),axis =1 )
+    newVtx = np.zeros((Vtx.shape[0], 4))
+    for i in range(BBTrans.shape[0]):
+        Pose = BBTrans[i]
+        newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]/weightsum
+        newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]/weightsum
+        newVtx[:,2] += np.dot(pt,Pose.T)[:,2]*weights[:,i]/weightsum
+        newVtx[:,3] += np.dot(pt,Pose.T)[:,3]*weights[:,i]/weightsum
+    
+    # project to 2D
+    pix = np.array([0., 0., 1.])
+    pix = np.stack((pix for i in range(len(newVtx)) ))
+    newVtx[:,2] = General.in_mat_zero2one(newVtx[:,2])
+    pix[:,0] = newVtx[:,0]/newVtx[:,2]
+    pix[:,1] = newVtx[:,1]/newVtx[:,2]
+    pix = np.dot( pix, intrinsic.T)
+    
+    # get error
+    bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+    error = newVtx[:,2]-depthImg[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap]
+    error = sum(error*bmap)
+    '''
+    a = depthImg>0
+    a = a*0.5
+    a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.5
+    cv2.imshow("", a)
+    cv2.waitKey()
+    '''
+    return error
