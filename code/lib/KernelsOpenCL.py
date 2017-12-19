@@ -65,7 +65,7 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
                 weight = pow(pt.x-coords[0+BBc*3],2);
                 weight += pow(pt.y-coords[1+BBc*3],2);
                 weight += pow(pt.z-coords[2+BBc*3],2);
-                weight = pow(weight,0.5)
+                weight = pow(weight,0.5);
                 sumweight += weight;
                 for (Trc=0; Trc<12; Trc++){
                     Tr[Trc] += weight * BBTrans[Trc+16*BBc];
