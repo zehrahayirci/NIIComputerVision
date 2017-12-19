@@ -19,7 +19,7 @@ __kernel void Test(__global float *TSDF) {
 Kernel_FuseTSDF = """
 __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __constant float *Param, __constant int *Dim,
                            __constant float *Pose, 
-                           __constant float *BBTrans, const int BBNum, __constant float *coords, const int sigma,
+                           __constant float *BBTrans, const int BBNum, __constant float *coords, const float sigma,
                            __constant float *calib, const int n_row, const int m_col, __global short int *Weight) {
         //const sampler_t smp =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
 
