@@ -92,11 +92,14 @@ class TSDFManager():
         #cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Tg)
         cl.enqueue_write_buffer(self.GPUManager.queue, self.DepthGPU, Image.depth_image)
         cl.enqueue_write_buffer(self.GPUManager.queue, self.BBTransGPU, BBTrans)
+        sigma = 0.13
+        if self.BBNum>8:
+            sigma = 0.3
 
         # fuse data of the RGBD imnage with the TSDF volume 3D model
         self.GPUManager.programs['FuseTSDF'].FuseTSDF(self.GPUManager.queue, (self.Size[0], self.Size[1]), None, \
                                 self.TSDFGPU, self.DepthGPU, self.Param, self.Size_Volume, self.Pose_GPU, \
-                                self.BBTransGPU, np.int32(self.BBNum), self.coordsGPU, \
+                                self.BBTransGPU, np.int32(self.BBNum), self.coordsGPU, np.int32(self.BBNum),\
                                 self.Calib_GPU, np.int32(Image.Size[0]), np.int32(Image.Size[1]),self.WeightGPU)
 
         # update CPU array. Read the buffer to write in the CPU array.
