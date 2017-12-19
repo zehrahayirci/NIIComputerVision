@@ -71,9 +71,6 @@ class Stitch():
         :param s: subsampling factor
         :return: list of transformed vertices
         """
-        sigma = 0.13
-        if coordGbl.shape[0]>8:
-            sigma = 0.3
         stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(pt, Tg.T)
@@ -86,9 +83,7 @@ class Stitch():
         weights = np.zeros((Vtx.shape[0], coordGbl.shape[0]), dtype=np.double)
 
         for i in range(coordGbl.shape[0]):
-            #weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
-            weights[:,i] = LA.norm(Vtx-coordGbl[i,:], axis=1)
-            weights[:,i] = np.exp(-(weights[:,i]*weights[:,i])/2/sigma/sigma)
+            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
             Pose = BBTrans[i]
             newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]
             newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]
@@ -114,9 +109,6 @@ class Stitch():
         :param s: subsampling factor
         :return: list of transformed normales
         """
-        sigma = 0.13
-        if coordGbl.shape[0]>8:
-            sigma = 0.3
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Tg[0:3,0:3].T)
         stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
@@ -131,9 +123,7 @@ class Stitch():
         newnmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
 
         for i in range(coordGbl.shape[0]):
-            #weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
-            weights[:,i] = LA.norm(Vtx-coordGbl[i,:], axis=1)
-            weights[:,i] = np.exp(-(weights[:,i]*weights[:,i])/2/sigma/sigma)
+            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
             Pose = BBTrans[i]
             newnmle[:,0] += np.dot(nmle,Pose[0:3,0:3].T)[:,0]*weights[:,i]
             newnmle[:,1] += np.dot(nmle,Pose[0:3,0:3].T)[:,1]*weights[:,i]
