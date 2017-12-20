@@ -444,6 +444,8 @@ class Application(tk.Frame):
         # Initialize Body parts
         Parts = []
         Parts.append(BdyPrt.BodyParts(self.GPUManager,self.RGBD[0],self.RGBD[0], Tg[0]))
+        BPVtx = []
+        BPVtx.append(np.array((0,0,0)))
         # Creating mesh of each body part
         for bp in range(bpstart,nbBdyPart):
             Parts.append(BdyPrt.BodyParts(self.GPUManager, self.RGBD[0], self.RGBD[bp], Tg[bp]))
@@ -459,6 +461,7 @@ class Application(tk.Frame):
                 for j in range(4):
                     PoseBP[bp][i][j] = Tg[bp][i][j]
             # Concatenate all the body parts for stitching purpose
+            BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp]))
             if bp == bpstart :
                 StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices,PoseBP[bp])
                 StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices,PoseBP[bp])
@@ -652,6 +655,8 @@ class Application(tk.Frame):
             # Transform the bounding-boxes into current image
             newRGBD[0].skeVtx[0] = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], newRGBD[0])
             newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(preRGBD[0].skeVtx[0], preRGBD[0].coordsGbl, preRGBD[0].BBTrans)
+            #newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans)
+            
             #GT
             '''
             for bp in range(1, nbBdyPart):
@@ -681,7 +686,8 @@ class Application(tk.Frame):
             rendering_originmesh = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
 
-            
+            BPVtx = []
+            BPVtx.append(np.array((0,0,0)))            
             # Updating mesh of each body part
             for bp in range(1,nbBdyPart):
                 # find tranformation from new BB
@@ -697,18 +703,19 @@ class Application(tk.Frame):
                         PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
 
                 # TSDF Fusion of the body part
-                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].BBTrans[bp])
+                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].BBTrans[bp])
 
                 # Create Mesh
-                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
+                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
                 nb_facesGlo = nb_facesGlo +Parts[bp].MC.nb_faces[0]
                 
                 # Stitch all the body parts
+                BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices,Tg[bp]))
                 if bp ==1 :
                     StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices,Tg[bp], self.RGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp])
                     StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, Tg[bp], self.RGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp])

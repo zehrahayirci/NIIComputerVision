@@ -9,6 +9,7 @@ Created on Thu Mar  2 16:47:40 2017
 import imp
 import numpy as np
 from numpy import linalg as LA
+import math
 from math import sin, cos, acos
 import scipy as sp
 import pandas 
@@ -644,9 +645,8 @@ class Tracker():
     def RegisterBBMesh(self, coords, VtxList, depthImg, intrinsic, BBTrans_ori):
         '''
         refine the transform of corner of each body part by registering vertex with depth image
-        :param coords: contain all body RGBD
-        :param coords_pre: the position of corner in preframe
-        :param VtxList: vertices of each body part in global coordinate
+        :param coords: the position of corner in first frame
+        :param VtxList: vertices of each body part in global coordinate of first frame
         :param depthImg: depth image
         :param intrinsic: intrinsic matrix
         :param BBTrans_ori: original Bounding-boxes transform matrix
@@ -661,33 +661,199 @@ class Tracker():
             BBTrans[bp][:,1,1] = 1
             BBTrans[bp][:,2,2] = 1
             BBTrans[bp][:,3,3] = 1
-
         # for each body part
         for bp in BPlist:
             print bp
             coord = coords[bp]
             Vtx = VtxList[bp]
+            sigma = 0.13
+            if bp==10:
+                sigma = 0.3
 
             #get weight
             weights = np.zeros((Vtx.shape[0], coord.shape[0]), dtype=np.double)
             for i in range(coord.shape[0]):
                 weights[:, i] = 1/LA.norm(Vtx-coord[i,:], axis=1)
             weightsum = np.sum(weights, axis=1)
+            for i in range(coord.shape[0]):
+                weights[:,i] /= weightsum
 
             # energy function
-            #error=deformVtx_function(BBTrans[bp].reshape(coord.shape[0]*4*4), Vtx, weights, weightsum, depthImg, intrinsic)
-            #print error
-            res = sp.optimize.least_squares(deformVtx_function, BBTrans[bp].reshape(coord.shape[0]*4*4), max_nfev=100, args=(Vtx, weights, weightsum, depthImg, intrinsic))
-            print res
-            BBTrans[bp] = res.x.reshape((coord.shape[0],4,4))
+            ##error=deformVtx_function(BBTrans[bp].reshape(coord.shape[0]*4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
+            ##error=deformVtx_function(BBTrans[bp][0].reshape(4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
+            ##print error
+            ##res = sp.optimize.least_squares(deformVtx_function, BBTrans[bp].reshape(coord.shape[0]*4*4), max_nfev=15, args=(Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic))
+            res = sp.optimize.least_squares(deformVtx_function, BBTrans[bp][0].reshape(4*4), max_nfev=30, args=(Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic))
+            #cons=({'type':'eq', 'fun': lambda x: np.array([np.sum(x[[0,1,2,4,5,6,8,9,10]])-1]), 'jac': lambda x: np.array([1,1,1,0,1,1,1,0,1,1,1,0,0,0,0,0])})
+            #res = sp.optimize.minimize(deformVtx_function, BBTrans[bp][0].reshape(4*4), options={'maxiter': 30}, \
+            #args=(Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic), method='Nelder-Mead',\
+            #constraints=cons
+            #)
+            #print res
+            ##BBTrans[bp] = res.x.reshape((coord.shape[0],4,4))
+            BBTrans[bp][0] = res.x.reshape((4,4))
+            ##error=deformVtx_function(BBTrans[bp].reshape(coord.shape[0]*4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
+            ##error=deformVtx_function(BBTrans[bp][0].reshape(4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
+            ##print error
+            #print BBTrans[bp]
 
-            # merge to BBTrans_ori and modified coords
-            for i in range(coord.shape[0]):
+            for i in range(1,coord.shape[0]):
+                BBTrans[bp][1] = BBTrans[bp][0]
+
+            # update same corner point
+            if bp==1:
+                BBTrans[12][0,:,:] = BBTrans[1][3,:,:]
+                BBTrans[12][4,:,:] = BBTrans[1][7,:,:]
+                BBTrans[12][1,:,:] = BBTrans[1][2,:,:]
+                BBTrans[12][5,:,:] = BBTrans[1][6,:,:]
+                if coords[2][0,0]<coords[2][3,0]:
+                    BBTrans[2][0,:,:] = BBTrans[1][0,:,:]
+                    BBTrans[2][4,:,:] = BBTrans[1][4,:,:]
+                    BBTrans[2][3,:,:] = BBTrans[1][1,:,:]
+                    BBTrans[2][7,:,:] = BBTrans[1][5,:,:]
+                else:
+                    BBTrans[2][0,:,:] = BBTrans[1][1,:,:]
+                    BBTrans[2][4,:,:] = BBTrans[1][5,:,:]
+                    BBTrans[2][3,:,:] = BBTrans[1][0,:,:]
+                    BBTrans[2][7,:,:] = BBTrans[1][4,:,:]
+            if bp==2:
+                if coords[2][0,0]<coords[2][3,0]:
+                    BBTrans[1][0,:,:] = BBTrans[2][0,:,:]
+                    BBTrans[1][4,:,:] = BBTrans[2][4,:,:]
+                    BBTrans[1][1,:,:] = BBTrans[2][3,:,:]
+                    BBTrans[1][5,:,:] = BBTrans[2][7,:,:]
+                else:
+                    BBTrans[1][0,:,:] = BBTrans[2][3,:,:]
+                    BBTrans[1][4,:,:] = BBTrans[2][7,:,:]
+                    BBTrans[1][1,:,:] = BBTrans[2][0,:,:]
+                    BBTrans[1][5,:,:] = BBTrans[2][4,:,:]
+                BBTrans[10][0,:,:] = BBTrans[2][2,:,:]
+                BBTrans[10][9,:,:] = BBTrans[2][6,:,:]
+                BBTrans[10][1,:,:] = BBTrans[2][1,:,:]
+                BBTrans[10][10,:,:] = BBTrans[2][5,:,:]
+            if bp==3:
+                BBTrans[11][0,:,:] = BBTrans[3][3,:,:]
+                BBTrans[11][4,:,:] = BBTrans[3][7,:,:]
+                BBTrans[11][1,:,:] = BBTrans[3][2,:,:]
+                BBTrans[11][5,:,:] = BBTrans[3][6,:,:]
+                if coords[4][1,0]<coords[4][0,0]:
+                    BBTrans[4][1,:,:] = BBTrans[3][0,:,:]
+                    BBTrans[4][5,:,:] = BBTrans[3][4,:,:]
+                    BBTrans[4][0,:,:] = BBTrans[3][1,:,:]
+                    BBTrans[4][4,:,:] = BBTrans[3][5,:,:]
+                else:
+                    BBTrans[4][1,:,:] = BBTrans[3][1,:,:]
+                    BBTrans[4][5,:,:] = BBTrans[3][5,:,:]
+                    BBTrans[4][0,:,:] = BBTrans[3][0,:,:]
+                    BBTrans[4][4,:,:] = BBTrans[3][4,:,:]
+            if bp==4:
+                if coords[4][1,0]<coords[4][0,0]:
+                    BBTrans[3][0,:,:] = BBTrans[4][1,:,:]
+                    BBTrans[3][4,:,:] = BBTrans[4][5,:,:]
+                    BBTrans[3][1,:,:] = BBTrans[4][0,:,:]
+                    BBTrans[3][5,:,:] = BBTrans[4][4,:,:]
+                else:
+                    BBTrans[3][0,:,:] = BBTrans[4][0,:,:]
+                    BBTrans[3][4,:,:] = BBTrans[4][4,:,:]
+                    BBTrans[3][1,:,:] = BBTrans[4][1,:,:]
+                    BBTrans[3][5,:,:] = BBTrans[4][5,:,:]
+                BBTrans[10][4,:,:] = BBTrans[4][3,:,:] 
+                BBTrans[10][13,:,:] = BBTrans[4][7,:,:] 
+                BBTrans[10][5,:,:] = BBTrans[4][2,:,:] 
+                BBTrans[10][14,:,:] = BBTrans[4][6,:,:] 
+            if bp==5:
+                BBTrans[6][2,:,:] = BBTrans[5][3,:,:]
+                BBTrans[6][6,:,:] = BBTrans[5][7,:,:]
+                BBTrans[6][3,:,:] = BBTrans[5][2,:,:]
+                BBTrans[6][7,:,:] = BBTrans[5][6,:,:]
+                BBTrans[10][7,:,:] = BBTrans[5][0,:,:]
+                BBTrans[10][16,:,:] = BBTrans[5][4,:,:]
+                BBTrans[10][6,:,:] = BBTrans[5][1,:,:]
+                BBTrans[10][15,:,:] = BBTrans[5][5,:,:]
+                BBTrans[7][0,:,:] = BBTrans[5][0,:,:]
+                BBTrans[7][4,:,:] = BBTrans[5][4,:,:]
+            if bp==6:
+                BBTrans[5][3,:,:] = BBTrans[6][2,:,:]
+                BBTrans[5][7,:,:] = BBTrans[6][5,:,:]
+                BBTrans[5][2,:,:] = BBTrans[6][3,:,:]
+                BBTrans[5][6,:,:] = BBTrans[6][7,:,:]
+                BBTrans[14][0,:,:] = BBTrans[6][1,:,:]
+                BBTrans[14][4,:,:] = BBTrans[6][5,:,:]
+                BBTrans[14][1,:,:] = BBTrans[6][0,:,:]
+                BBTrans[14][5,:,:] = BBTrans[6][4,:,:]
+            if bp==7:
+                BBTrans[8][2,:,:] = BBTrans[7][2,:,:]
+                BBTrans[8][6,:,:] = BBTrans[7][6,:,:]
+                BBTrans[8][3,:,:] = BBTrans[7][1,:,:]
+                BBTrans[8][7,:,:] = BBTrans[7][5,:,:]
+                BBTrans[10][7,:,:] = BBTrans[7][0,:,:]
+                BBTrans[10][16,:,:] = BBTrans[7][4,:,:]
+                BBTrans[10][8,:,:] = BBTrans[7][3,:,:]
+                BBTrans[10][17,:,:] = BBTrans[7][7,:,:]
+                BBTrans[5][0,:,:] = BBTrans[7][0,:,:]
+                BBTrans[5][4,:,:] = BBTrans[7][4,:,:]
+            if bp==8:
+                BBTrans[7][2,:,:] = BBTrans[8][2,:,:]
+                BBTrans[7][6,:,:] = BBTrans[8][6,:,:]
+                BBTrans[7][1,:,:] = BBTrans[8][3,:,:]
+                BBTrans[7][5,:,:] = BBTrans[8][7,:,:]
+                BBTrans[13][0,:,:] = BBTrans[8][1,:,:]
+                BBTrans[13][4,:,:] = BBTrans[8][5,:,:]
+                BBTrans[13][1,:,:] = BBTrans[8][0,:,:]
+                BBTrans[13][5,:,:] = BBTrans[8][4,:,:]
+            if bp==9:
+                BBTrans[10][2,:,:] = BBTrans[9][0,:,:]
+                BBTrans[10][11,:,:] = BBTrans[9][4,:,:]
+                BBTrans[10][3,:,:] = BBTrans[9][3,:,:]
+                BBTrans[10][12,:,:] = BBTrans[9][7,:,:]
+            if bp==10:
+                BBTrans[2][2,:,:] = BBTrans[10][0,:,:]
+                BBTrans[2][6,:,:] = BBTrans[10][9,:,:]
+                BBTrans[2][1,:,:] = BBTrans[10][1,:,:]
+                BBTrans[2][5,:,:] = BBTrans[10][10,:,:]
+                BBTrans[9][0,:,:] = BBTrans[10][2,:,:]
+                BBTrans[9][4,:,:] = BBTrans[10][11,:,:]
+                BBTrans[9][3,:,:] = BBTrans[10][3,:,:]
+                BBTrans[9][7,:,:] = BBTrans[10][12,:,:]
+                BBTrans[4][3,:,:] = BBTrans[10][4,:,:]
+                BBTrans[4][7,:,:] = BBTrans[10][13,:,:]
+                BBTrans[4][2,:,:] = BBTrans[10][5,:,:]
+                BBTrans[4][6,:,:] = BBTrans[10][14,:,:]
+                BBTrans[5][1,:,:] = BBTrans[10][6,:,:]
+                BBTrans[5][5,:,:] = BBTrans[10][15,:,:]
+                BBTrans[5][0,:,:] = BBTrans[10][7,:,:]
+                BBTrans[5][4,:,:] = BBTrans[10][16,:,:]
+                BBTrans[7][0,:,:] = BBTrans[10][7,:,:]
+                BBTrans[7][4,:,:] = BBTrans[10][16,:,:]
+                BBTrans[7][3,:,:] = BBTrans[10][8,:,:]
+                BBTrans[7][7,:,:] = BBTrans[10][17,:,:]
+            if bp==11:
+                BBTrans[3][3,:,:] = BBTrans[11][0,:,:]
+                BBTrans[3][7,:,:] = BBTrans[11][4,:,:]
+                BBTrans[3][2,:,:] = BBTrans[11][1,:,:]
+                BBTrans[3][6,:,:] = BBTrans[11][5,:,:]
+            if bp==12:
+                BBTrans[1][3,:,:] = BBTrans[12][0,:,:]
+                BBTrans[1][7,:,:] = BBTrans[12][4,:,:]
+                BBTrans[1][2,:,:] = BBTrans[12][1,:,:]
+                BBTrans[1][6,:,:] = BBTrans[12][5,:,:]
+            if bp==13:
+                BBTrans[8][1,:,:] = BBTrans[13][0,:,:]
+                BBTrans[8][5,:,:] = BBTrans[13][4,:,:]
+                BBTrans[8][0,:,:] = BBTrans[13][1,:,:]
+                BBTrans[8][4,:,:] = BBTrans[13][5,:,:]
+            if bp==14:
+                BBTrans[6][1,:,:] = BBTrans[14][0,:,:]
+                BBTrans[6][5,:,:] = BBTrans[14][4,:,:]
+                BBTrans[6][0,:,:] = BBTrans[14][1,:,:]
+                BBTrans[6][4,:,:] = BBTrans[14][5,:,:]
+        # merge to BBTrans_ori and modified coords
+        for bp in BPlist:
+            for i in range(coords[bp].shape[0]):
                 BBTrans_ori[bp][i,:,:] = np.dot(BBTrans[bp][i,:,:], BBTrans_ori[bp][i,:,:])
                 pt = np.array((0.,0.,0.,1.), dtype=np.float32)
                 pt[0:3] = coords[bp][i,:]
                 coords[bp][i,:] = np.dot(BBTrans[bp][i,:,:], pt.T).T[0:3]
-
         return coords, BBTrans_ori
             
 
@@ -959,29 +1125,35 @@ def RegisterTs_function(Tr, initTr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, 
 
     return term
 
-def deformVtx_function(BBTrans_1D, Vtx, weights, weightsum, depthImg, intrinsic):
+def deformVtx_function(BBTrans_1D, Vtx, BBTrans_ori, weights, depthImg, intrinsic):
     '''
     :param BBTrans_1D: transform matrix of one bounding-box
     :param Vtx: the vertice in global at first frame
-    :param weights: the weight of corners and vtx
-    :param weightsum:
+    :param BBTrans_ori: original Bounding-boxes transform matrix from first frame to current frame
+    :param weights: the weight of corners and vtx (sum=1 for each row)
     :param depthImg: the depth Image
     :param intrinsic: intrinsic matrix
     '''
     # 1D->3D
-    BBTrans = BBTrans_1D.reshape((BBTrans_1D.shape[0]/16,4,4))
+    ##BBTrans = BBTrans_1D.reshape((BBTrans_1D.shape[0]/16,4,4))
+    BBTrans = BBTrans_1D.reshape((4,4))
+    # normalize
+    #BBTrans[3,0:3] = 0
+    #BBTrans[3,3] = 1
 
     # deform vtx
     stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
     pt = np.stack( (Vtx[:,0],Vtx[:,1],Vtx[:,2],stack_pt),axis =1 )
     newVtx = np.zeros((Vtx.shape[0], 4))
-    for i in range(BBTrans.shape[0]):
-        Pose = BBTrans[i]
-        newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]/weightsum
-        newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]/weightsum
-        newVtx[:,2] += np.dot(pt,Pose.T)[:,2]*weights[:,i]/weightsum
-        newVtx[:,3] += np.dot(pt,Pose.T)[:,3]*weights[:,i]/weightsum
-    
+    for i in range(BBTrans_ori.shape[0]):
+        Pose = BBTrans_ori[i]
+        ##Pose = np.dot(BBTrans[i], Pose)
+        Pose = np.dot(BBTrans, Pose)
+        newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]
+        newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]
+        newVtx[:,2] += np.dot(pt,Pose.T)[:,2]*weights[:,i]
+        newVtx[:,3] += np.dot(pt,Pose.T)[:,3]*weights[:,i]
+
     # project to 2D
     pix = np.array([0., 0., 1.])
     pix = np.stack((pix for i in range(len(newVtx)) ))
@@ -989,16 +1161,18 @@ def deformVtx_function(BBTrans_1D, Vtx, weights, weightsum, depthImg, intrinsic)
     pix[:,0] = newVtx[:,0]/newVtx[:,2]
     pix[:,1] = newVtx[:,1]/newVtx[:,2]
     pix = np.dot( pix, intrinsic.T)
-    
+    pix = pix.astype(int)
+
     # get error
     bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
-    error = newVtx[:,2]-depthImg[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap]
-    error = sum(error*bmap)
+    error = newVtx[:,2]-depthImg[pix[:,1]*bmap, pix[:,0]*bmap]
+    error = np.abs(error)
+    error = sum(error*bmap+sum(bmap==0)*2)
     '''
     a = depthImg>0
     a = a*0.5
     a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.5
     cv2.imshow("", a)
-    cv2.waitKey()
+    cv2.waitKey(1)
     '''
     return error
