@@ -464,8 +464,7 @@ class Application(tk.Frame):
             BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp]))
             if bp == bpstart  :
                 StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp])
-                #StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices,PoseBP[bp])
-                StitchBdy.StitchedNormales = Parts[bp].MC.Normales
+                StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices,PoseBP[bp])
                 StitchBdy.StitchedFaces = Parts[bp].MC.Faces
             else:
                 StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp])
@@ -738,8 +737,7 @@ class Application(tk.Frame):
                 BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp]))
                 if bp ==1 :
                     StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp])
-                    #StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, Tg[bp], self.RGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp])
-                    StitchBdy.StitchedNormales = Parts[bp].MC.Normales
+                    StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, Tg[bp])
                     StitchBdy.StitchedFaces = Parts[bp].MC.Faces
                 else:
                     StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp])
