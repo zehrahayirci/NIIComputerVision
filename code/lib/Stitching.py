@@ -13,6 +13,7 @@ from numpy import linalg as LA
 import imp    
 from skimage.draw import line_aa
 import copy
+from scipy.interpolate import griddata
 PI = math.pi
 
 General = imp.load_source('General', './lib/General.py')
@@ -31,16 +32,16 @@ class Stitch():
         self.StitchedFaces = 0
         self.StitchedNormales = 0
 
-    def NaiveStitch(self, PartVtx,PartNmls,PartFaces, Tg, coordGbl_pre=np.zeros(0), BBTrans=np.zeros(0)):
+    def NaiveStitch(self, PartVtx,PartNmls,PartFaces, coordL, coordGbl, Tg):
         """
         Add the vertices and faces of each body parts
         together after transforming them in the global coordinates system
         :param PartVtx: List of vertices for a body parts
         :param PartNmls: List of normales for a body parts
         :param PartFaces:  List of faces for a body parts
-        :param Tg:  local to global transform
-        :param coordsGbl_pre: the corners of bounding-box in global coord
-        :param BBTrans: the transform matrix of each corners in global bounding-box
+        :param coordL: the corners of bounding-box in local coord
+        :param coordGbl: the corners of bounding-box in global coord
+        :param Tg: the transform matrix from local to global
         :return: none
         """
         #Initialize values from the list of
@@ -49,8 +50,9 @@ class Stitch():
         ConcatNmls = self.StitchedNormales
 
         # tranform the vertices in the global coordinates system
-        PartVertices = self.TransformVtx(PartVtx,Tg, coordGbl_pre, BBTrans, 1)
-        PartNormales = self.TransformNmls(PartNmls,PartVtx, Tg, coordGbl_pre, BBTrans, 1)
+        PartVertices = self.TransformVtx(PartVtx, coordL, coordGbl, Tg, 1)
+        #PartNormales = self.TransformNmls(PartNmls,PartVtx, Tg, coordGbl_pre, BBTrans, 1)
+        PartNormales = PartNmls
         PartFacets = PartFaces + np.max(ConcatFaces)+1
 
         # concatenation
@@ -60,14 +62,14 @@ class Stitch():
         
 
         
-    def TransformVtx(self, Vtx, Tg, coordGbl=np.zeros(0), BBTrans=np.zeros(0), s=1):
+    def TransformVtx(self, Vtx, coordL, coordGbl, Tg, s=1):
         """
         Transform the vertices in a system to another system.
         Here it will be mostly used to transform from local system to global coordiantes system
         :param Vtx: List of vertices
-        :param Tg:  local to global transform
-        :param coordsGbl: the corners of bounding-box in global coord
-        :param coordsGblTrans: the transform matrix of each corners in global bounding-box
+        :param coordL: the corners of bounding-box in global coord of first frame
+        :param coordGbl: the corners of bounding-box in global coord
+        :param Tg: the transform matrix from local to global
         :param s: subsampling factor
         :return: list of transformed vertices
         """
@@ -75,27 +77,466 @@ class Stitch():
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(pt, Tg.T)
         Vtx = pt[:,0:3]
-        
-        if coordGbl.shape[0]==0:
-            return Vtx
+        newVtx = np.zeros((Vtx.shape[0],3), dtype=np.float32)
+        VtxNum = Vtx.shape[0]
 
-        newVtx = np.zeros((Vtx.shape[0], 4))
-        weights = np.zeros((Vtx.shape[0], coordGbl.shape[0]), dtype=np.double)
-
-        for i in range(coordGbl.shape[0]):
-            weights[:, i] = 1/LA.norm(Vtx-coordGbl[i,:], axis=1)
-            Pose = BBTrans[i]
-            newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]
-            newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]
-            newVtx[:,2] += np.dot(pt,Pose.T)[:,2]*weights[:,i]
-            newVtx[:,3] += np.dot(pt,Pose.T)[:,3]*weights[:,i]
-
-        newVtx[:,0] /= np.sum(weights, axis=1)
-        newVtx[:,1] /= np.sum(weights, axis=1)
-        newVtx[:,2] /= np.sum(weights, axis=1)
-        newVtx[:,3] /= np.sum(weights, axis=1)
-
-        return newVtx[:,0:3]
+        if coordL.shape[0]==8:
+            #initial
+            weights = np.zeros((VtxNum,10), dtype=np.float32)
+            wlist = [] #[point1,point2]
+            ppoints = np.zeros((VtxNum,8,3), dtype=np.float32)
+            checkmap = np.zeros((VtxNum, 10))
+            #get order
+            connectIdxList = [[1,3,4],[0,2,5],[1,3,5],[0,2,7],[0,5,7],[1,4,6],[2,5,7],[3,4,6]]
+            ind_minx = 0
+            dis = np.zeros((3,3), dtype=float)
+            dis[0,:] = np.abs(coordL[ind_minx,:]-coordL[connectIdxList[ind_minx][0],:])/LA.norm(coordL[ind_minx,:]-coordL[connectIdxList[ind_minx][0],:])
+            dis[1,:] = np.abs(coordL[ind_minx,:]-coordL[connectIdxList[ind_minx][1],:])/LA.norm(coordL[ind_minx,:]-coordL[connectIdxList[ind_minx][1],:])
+            dis[2,:] = np.abs(coordL[ind_minx,:]-coordL[connectIdxList[ind_minx][2],:])/LA.norm(coordL[ind_minx,:]-coordL[connectIdxList[ind_minx][2],:])
+            #ind_minxx = connectIdxList[ind_minx][np.argmax(dis[:,0])]
+            #ind_minxy = connectIdxList[ind_minx][np.argmax(dis[:,1])]
+            #ind_minxz = connectIdxList[ind_minx][np.argmax(dis[:,2])]
+            if dis[0,0]==0:
+                ind_minxx = connectIdxList[ind_minx][1]
+                ind_minxy = connectIdxList[ind_minx][0]
+            elif dis[0,1]==0:
+                ind_minxx = connectIdxList[ind_minx][0]
+                ind_minxy = connectIdxList[ind_minx][1]
+            elif dis[1,0]==0:
+                ind_minxx = connectIdxList[ind_minx][0]
+                ind_minxy = connectIdxList[ind_minx][1]
+            elif dis[1,1]==0:
+                ind_minxx = connectIdxList[ind_minx][1]
+                ind_minxy = connectIdxList[ind_minx][0]
+            elif dis[0,0]/dis[0,1]>dis[1,0]/dis[1,1]:
+                ind_minxx = connectIdxList[ind_minx][0]
+                ind_minxy = connectIdxList[ind_minx][1]
+            else:
+                ind_minxx = connectIdxList[ind_minx][1]
+                ind_minxy = connectIdxList[ind_minx][0]
+            ind_minxz = 4
+            if ind_minxx==1 and ind_minxy==3:
+                wlist.append([0,1])
+                wlist.append([3,2])
+                wlist.append([4,5])
+                wlist.append([7,6])
+            elif ind_minxx==1 and ind_minxy==4:
+                wlist.append([0,1])
+                wlist.append([4,5])
+                wlist.append([3,2])
+                wlist.append([7,6])
+            elif ind_minxx==3 and ind_minxy==1:
+                wlist.append([0,3])
+                wlist.append([1,2])
+                wlist.append([4,7])
+                wlist.append([5,6])
+            elif ind_minxx==3 and ind_minxy==4:
+                wlist.append([0,3])
+                wlist.append([4,7])
+                wlist.append([1,2])
+                wlist.append([5,6])
+            elif ind_minxx==4 and ind_minxy==1:
+                wlist.append([0,4])
+                wlist.append([1,5])
+                wlist.append([3,7])
+                wlist.append([2,6])
+            elif ind_minxx==4 and ind_minxy==3:
+                wlist.append([0,4])
+                wlist.append([3,7])
+                wlist.append([1,5])
+                wlist.append([2,6])
+            else:
+                print "errorQQ?"
+                exit()
+            #get intersect of edges and x-plane
+            for w in range(len(wlist)):
+                wpair = wlist[w]
+                pa = coordL[wpair[0],:]
+                pb = coordL[wpair[1],:]
+                pv = pa-pb
+                planeF = np.zeros((VtxNum,4), dtype=float)
+                planeF[:,0] = 1
+                planeF[:,3] = Vtx[:,0]
+                termL = np.sum(planeF[:,0:3]*pv.reshape((1,3)),axis=1)
+                termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa.reshape((1,3)),axis=1)
+                time = termR/termL
+                projectP = pa.reshape((1,3))+pv.reshape((1,3))*time.reshape((VtxNum,1))
+                ppoints[:,w,:] = projectP
+                checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb, axis = 1))*1
+                checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa, axis = 1))*2  
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa)*(checkmap[:,w]==0)
+                weights[:,w] += LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+                weights[:,w] += LA.norm(pa-pb)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+                #ppoints[:,w,:] =  (pa.reshape((1,3))*weights[:,w].reshape((VtxNum, 1))+pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pb.reshape((1,3))-pa.reshape((1,3))*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pa.reshape((1,3))-pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                #print ppoints[:,w,:]
+                #print projectP
+                #print Vtx
+                #exit()
+            wlist.append([0,1])
+            wlist.append([2,3])
+            for w in range(4, 6):#get intersect of edges and y-plane
+                wpair = wlist[w]
+                pa = ppoints[:,wpair[0],:]
+                pb = ppoints[:,wpair[1],:]  
+                pv = pa-pb
+                planeF = np.zeros((VtxNum,4), dtype=float)
+                planeF[:,1] = 1
+                planeF[:,3] = Vtx[:,1]
+                termL = np.sum(planeF[:,0:3]*pv,axis=1)
+                termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+                time = termR/termL
+                projectP = pa+pv*time.reshape((VtxNum,1))
+                ppoints[:,w,:] = projectP
+                checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
+                checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0)
+                weights[:,w] += LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+                weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+                #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                #print ppoints[:,w,:]
+                #print projectP
+                #print Vtx
+                #exit()
+            w = 6 #get intersect of edges and z-plane
+            pa = ppoints[:,4,:]
+            pb = ppoints[:,5,:]
+            pv = pa-pb
+            planeF = np.zeros((VtxNum,4), dtype=float)
+            planeF[:,2] = 1
+            planeF[:,3] = Vtx[:,2]
+            termL = np.sum(planeF[:,0:3]*pv,axis=1)
+            termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+            time = termR/termL
+            projectP = pa+pv*time.reshape((VtxNum,1))
+            ppoints[:,w,:] = projectP
+            checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
+            checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
+            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0)
+            weights[:,w] += LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+            weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+            #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+            #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            #print ppoints[:,w,:]
+            #print projectP
+            #print Vtx
+            #exit()
+            # get new Vtx
+            for w in range(0,4):
+                wpair = wlist[w]
+                pa = coordGbl[wpair[0],:]
+                pb = coordGbl[wpair[1],:]
+                ppoints[:,w,:] =  (pa.reshape((1,3))*weights[:,w].reshape((VtxNum, 1))+pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pb.reshape((1,3))-pa.reshape((1,3))*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pa.reshape((1,3))-pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            for w in range(4,6):
+                wpair = wlist[w]
+                pa = ppoints[:,wpair[0],:]
+                pb = ppoints[:,wpair[1],:]
+                ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            w = 6
+            pa = ppoints[:,4,:]
+            pb = ppoints[:,5,:]
+            ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+            ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            return ppoints[:,6,:]
+        elif coordL.shape[0]==19:
+            #initial
+            weights = np.zeros((VtxNum,20), dtype=np.float32)
+            wweights = np.zeros((VtxNum,20), dtype=np.float32)
+            wlist = [[0,9],[1,10],[2,11],[3,12],[4,13],[5,14],[6,15],[7,16],[8,17]] #[point1,point2]
+            ppoints = np.zeros((VtxNum,20,3), dtype=np.float32)
+            checkmap = np.zeros((VtxNum,20))
+            #get intersect of edges and z-plane
+            for w in range(len(wlist)):
+                wpair = wlist[w]
+                pa = coordL[wpair[0],:]
+                pb = coordL[wpair[1],:]
+                pv = pa-pb
+                planeF = np.zeros((VtxNum,4), dtype=float)
+                planeF[:,2] = 1
+                planeF[:,3] = Vtx[:,2]
+                termL = np.sum(planeF[:,0:3]*pv.reshape((1,3)),axis=1)
+                termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa.reshape((1,3)),axis=1)
+                time = termR/termL
+                projectP = pa.reshape((1,3))+pv.reshape((1,3))*time.reshape((VtxNum,1))
+                ppoints[:,w,:] = projectP
+                checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb, axis = 1))*1
+                checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa, axis = 1))*2  
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa)*(checkmap[:,w]==0)
+                weights[:,w] += LA.norm(projectP-pb, axis = 1)/(LA.norm(projectP-pa, axis = 1)+(checkmap[:,w]==0))*(checkmap[:,w]==1)
+                weights[:,w] += LA.norm(pa-pb)/(LA.norm(projectP-pb, axis = 1)+(checkmap[:,w]==0))*(checkmap[:,w]==2)
+                #ppoints[:,w,:] =  (pa.reshape((1,3))*weights[:,w].reshape((VtxNum, 1))+pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pb.reshape((1,3))-pa.reshape((1,3))*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pa.reshape((1,3))-pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))/(weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                #print ppoints[:,w,:]
+                #print projectP
+                #print Vtx
+                #exit()
+            wlist.append([0,1])
+            wlist.append([1,2])
+            wlist.append([3,4])
+            wlist.append([4,5])
+            wlist.append([5,6])
+            wlist.append([6,7])
+            wlist.append([7,8])
+            wlist.append([8,0])
+            for w in range(9, len(wlist)):#get intersect of edges and x-plane
+                wpair = wlist[w]
+                pa = ppoints[:,wpair[0],:]
+                pb = ppoints[:,wpair[1],:]  
+                pv = pa-pb
+                planeF = np.zeros((VtxNum,4), dtype=float)
+                planeF[:,1] = 1
+                planeF[:,3] = Vtx[:,1]
+                termL = np.sum(planeF[:,0:3]*pv,axis=1)
+                termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+                time = termR/termL
+                projectP = pa+pv*time.reshape((VtxNum,1))
+                ppoints[:,w,:] = projectP
+                checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
+                checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0)
+                weights[:,w] += LA.norm(projectP-pb, axis = 1)/(LA.norm(projectP-pa, axis = 1)+(checkmap[:,w]==0))*(checkmap[:,w]==1)
+                weights[:,w] += LA.norm(pa-pb,axis=1)/(LA.norm(projectP-pb, axis = 1)+(checkmap[:,w]==0))*(checkmap[:,w]==2)
+                wweights[:,w] = LA.norm(pa-Vtx,axis=1)+LA.norm(pb-Vtx,axis=1)
+                #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/(weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                #print ppoints[:,w,:]
+                #print projectP
+                #print Vtx
+                #exit()
+            wweights = np.exp(-wweights**2/0.23/0.23/2)
+            #get two points
+            wwlist = [[9,10,15,16],[11,12,13,14]]
+            for w in range(len(wwlist)):
+                wpair = wwlist[w]
+                wweightssum = wweights[:,wpair[0]] + wweights[:,wpair[1]] + wweights[:,wpair[2]] + wweights[:,wpair[3]] 
+                wweights[:,wpair[0]] /= wweightssum
+                wweights[:,wpair[1]] /= wweightssum
+                wweights[:,wpair[2]] /= wweightssum
+                wweights[:,wpair[3]] /= wweightssum
+                ppoints[:,w+17,:] =  wweights[:,wpair[0]].reshape((VtxNum, 1))*ppoints[:,wpair[0],:]
+                ppoints[:,w+17,:] += wweights[:,wpair[1]].reshape((VtxNum, 1))*ppoints[:,wpair[1],:]
+                ppoints[:,w+17,:] += wweights[:,wpair[2]].reshape((VtxNum, 1))*ppoints[:,wpair[2],:]
+                ppoints[:,w+17,:] += wweights[:,wpair[3]].reshape((VtxNum, 1))*ppoints[:,wpair[3],:]
+            #print   ppoints[:,17,:]
+            #print   ppoints[:,18,:]
+            #print Vtx
+            #exit()
+            w = 19 #get intersect of edges and z-plane
+            pa = ppoints[:,17,:]
+            pb = ppoints[:,18,:]
+            pv = pa-pb
+            planeF = np.zeros((VtxNum,4), dtype=float)
+            planeF[:,0] = 1
+            planeF[:,3] = Vtx[:,0]
+            termL = np.sum(planeF[:,0:3]*pv,axis=1)
+            termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+            time = termR/termL
+            projectP = pa+pv*time.reshape((VtxNum,1))
+            ppoints[:,w,:] = projectP
+            checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
+            checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
+            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0)
+            weights[:,w] += LA.norm(projectP-pb, axis = 1)/(LA.norm(projectP-pa, axis = 1)+(checkmap[:,w]==0))*(checkmap[:,w]==1)
+            weights[:,w] += LA.norm(pa-pb,axis=1)/(LA.norm(projectP-pb, axis = 1)+(checkmap[:,w]==0))*(checkmap[:,w]==2)
+            #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+            #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/(weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            #print ppoints[:,w,:]
+            #print projectP
+            #print Vtx
+            #exit()
+            # get new Vtx
+            for w in range(0,9):
+                wpair = wlist[w]
+                pa = coordGbl[wpair[0],:]
+                pb = coordGbl[wpair[1],:]
+                ppoints[:,w,:] =  (pa.reshape((1,3))*weights[:,w].reshape((VtxNum, 1))+pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pb.reshape((1,3))-pa.reshape((1,3))*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pa.reshape((1,3))-pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))/(weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            for w in range(9,17):
+                wpair = wlist[w]
+                pa = ppoints[:,wpair[0],:]
+                pb = ppoints[:,wpair[1],:]
+                ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/(weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            for w in range(len(wwlist)):
+                wpair = wwlist[w]
+                ppoints[:,w+17,:] =  wweights[:,wpair[0]].reshape((VtxNum, 1))*ppoints[:,wpair[0],:]
+                ppoints[:,w+17,:] += wweights[:,wpair[1]].reshape((VtxNum, 1))*ppoints[:,wpair[1],:]
+                ppoints[:,w+17,:] += wweights[:,wpair[2]].reshape((VtxNum, 1))*ppoints[:,wpair[2],:]
+                ppoints[:,w+17,:] += wweights[:,wpair[3]].reshape((VtxNum, 1))*ppoints[:,wpair[3],:]
+            w = 19 
+            pa = ppoints[:,17,:]
+            pb = ppoints[:,18,:]
+            ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+            ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/(weights[:,w]+(checkmap[:,w]==0)).reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            return ppoints[:,w,:]
+        else: # part 10
+            #initial
+            weights = np.zeros((VtxNum,10), dtype=np.float32)
+            wlist = [] #[point1,point2]
+            ppoints = np.zeros((VtxNum,8,3), dtype=np.float32)
+            checkmap = np.zeros((VtxNum, 10))
+            # get four coordinates of each Vtx
+            corrCoordIdx = np.zeros((VtxNum, 4, 2), dtype=np.int32)
+            corrCoordIdx[:,0,0] = (Vtx[:,1]<=coordL[1,1])*1 #left
+            corrCoordIdx[:,1,0] = (Vtx[:,1]<=coordL[1,1])*2
+            corrCoordIdx[:,0,0] += (Vtx[:,1]>coordL[1,1])*(Vtx[:,1]<=coordL[0,1])*0
+            corrCoordIdx[:,1,0] += (Vtx[:,1]>coordL[1,1])*(Vtx[:,1]<=coordL[0,1])*1
+            corrCoordIdx[:,0,0] += (Vtx[:,1]>coordL[0,1])*(Vtx[:,1]<=coordL[8,1])*8
+            corrCoordIdx[:,1,0] += (Vtx[:,1]>coordL[0,1])*(Vtx[:,1]<=coordL[8,1])*0
+            corrCoordIdx[:,0,0] += (Vtx[:,1]>coordL[8,1])*7
+            corrCoordIdx[:,1,0] += (Vtx[:,1]>coordL[8,1])*8
+            corrCoordIdx[:,0,1] = (Vtx[:,1]<=coordL[4,1])*4 #right
+            corrCoordIdx[:,1,1] = (Vtx[:,1]<=coordL[4,1])*3
+            corrCoordIdx[:,0,1] += (Vtx[:,1]>coordL[4,1])*(Vtx[:,1]<=coordL[5,1])*5
+            corrCoordIdx[:,1,1] += (Vtx[:,1]>coordL[4,1])*(Vtx[:,1]<=coordL[5,1])*4
+            corrCoordIdx[:,0,1] += (Vtx[:,1]>coordL[5,1])*6
+            corrCoordIdx[:,1,1] += (Vtx[:,1]>coordL[5,1])*5
+            corrCoordIdx[:,2:4,:] = corrCoordIdx[:,0:2,:]+9
+            corrCoordIdx[:,0,1] = (Vtx[:,1]<=coordL[1,1])*4 #rightright
+            corrCoordIdx[:,1,1] = (Vtx[:,1]<=coordL[1,1])*3
+            corrCoordIdx[:,0,1] += (Vtx[:,1]>coordL[1,1])*(Vtx[:,1]<=coordL[0,1])*5
+            corrCoordIdx[:,1,1] += (Vtx[:,1]>coordL[1,1])*(Vtx[:,1]<=coordL[0,1])*4
+            corrCoordIdx[:,0,1] += (Vtx[:,1]>coordL[0,1])*(Vtx[:,1]<=coordL[8,1])*6
+            corrCoordIdx[:,1,1] += (Vtx[:,1]>coordL[0,1])*(Vtx[:,1]<=coordL[8,1])*5
+            corrCoordIdx[:,0,1] += (Vtx[:,1]>coordL[8,1])*6
+            corrCoordIdx[:,1,1] += (Vtx[:,1]>coordL[8,1])*7
+            corrCoordIdx[:,2:4,:] = corrCoordIdx[:,0:2,:]+9
+            # get new corr
+            corrCoord = np.zeros((VtxNum, 4,2,3), dtype=float)
+            for i in range(VtxNum):
+                corrCoord[i,0,0,:] = coordL[corrCoordIdx[i,0,0],:]
+                corrCoord[i,0,1,:] = coordL[corrCoordIdx[i,0,1],:]
+                corrCoord[i,1,0,:] = coordL[corrCoordIdx[i,1,0],:]
+                corrCoord[i,1,1,:] = coordL[corrCoordIdx[i,1,1],:]
+                corrCoord[i,2,0,:] = coordL[corrCoordIdx[i,2,0],:]
+                corrCoord[i,2,1,:] = coordL[corrCoordIdx[i,2,1],:]
+                corrCoord[i,3,0,:] = coordL[corrCoordIdx[i,3,0],:]
+                corrCoord[i,3,1,:] = coordL[corrCoordIdx[i,3,1],:]
+            #get intersect of edges and x-plane
+            for w in range(4):
+                pa = corrCoord[:,w,0,:]
+                pb = corrCoord[:,w,1,:]
+                pv = pa-pb
+                planeF = np.zeros((VtxNum,4), dtype=float)
+                planeF[:,0] = 1
+                planeF[:,3] = Vtx[:,0]
+                termL = np.sum(planeF[:,0:3]*pv,axis=1)
+                termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+                time = termR/termL
+                projectP = pa+pv*time.reshape((VtxNum,1))
+                ppoints[:,w,:] = projectP
+                checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb, axis = 1))*1
+                checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa, axis = 1))*2  
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+                weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+                weights[:,w] = np.nan_to_num(weights[:,w])
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0) + weights[:,w]*(checkmap[:,w]!=0)
+                #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                #print ppoints[:,w,:]
+                #print projectP
+                #print Vtx
+                #exit()
+            for w in range(4, 6):#get intersect of edges and y-plane
+                pa = ppoints[:,(w-4)*2,:]
+                pb = ppoints[:,(w-4)*2+1,:]  
+                pv = pa-pb
+                planeF = np.zeros((VtxNum,4), dtype=float)
+                planeF[:,1] = 1
+                planeF[:,3] = Vtx[:,1]
+                termL = np.sum(planeF[:,0:3]*pv,axis=1)
+                termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+                time = termR/termL
+                projectP = pa+pv*time.reshape((VtxNum,1))
+                ppoints[:,w,:] = projectP
+                checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
+                checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+                weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+                weights[:,w] = np.nan_to_num(weights[:,w])
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0) + weights[:,w]*(checkmap[:,w]!=0)
+                #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                #print ppoints[:,w,:]
+                #print projectP
+                #print Vtx
+                #exit()
+            w = 6 #get intersect of edges and z-plane
+            pa = ppoints[:,4,:]
+            pb = ppoints[:,5,:]
+            pv = pa-pb
+            planeF = np.zeros((VtxNum,4), dtype=float)
+            planeF[:,2] = 1
+            planeF[:,3] = Vtx[:,2]
+            termL = np.sum(planeF[:,0:3]*pv,axis=1)
+            termR = planeF[:,3]-np.sum(planeF[:,0:3]*pa,axis=1)
+            time = termR/termL
+            projectP = pa+pv*time.reshape((VtxNum,1))
+            ppoints[:,w,:] = projectP
+            checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
+            checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
+            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+            weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+            weights[:,w] = np.nan_to_num(weights[:,w])
+            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0) + weights[:,w]*(checkmap[:,w]!=0)
+            #ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
+            #ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            #ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            #print ppoints[:,w,:]
+            #print projectP
+            #print Vtx
+            #exit()
+            # get new Vtx
+            for i in range(VtxNum):# get new corr
+                corrCoord[i,0,0,:] = coordGbl[corrCoordIdx[i,0,0],:]
+                corrCoord[i,0,1,:] = coordGbl[corrCoordIdx[i,0,1],:]
+                corrCoord[i,1,0,:] = coordGbl[corrCoordIdx[i,1,0],:]
+                corrCoord[i,1,1,:] = coordGbl[corrCoordIdx[i,1,1],:]
+                corrCoord[i,2,0,:] = coordGbl[corrCoordIdx[i,2,0],:]
+                corrCoord[i,2,1,:] = coordGbl[corrCoordIdx[i,2,1],:]
+                corrCoord[i,3,0,:] = coordGbl[corrCoordIdx[i,3,0],:]
+                corrCoord[i,3,1,:] = coordGbl[corrCoordIdx[i,3,1],:]
+            for w in range(0,4):
+                pa = corrCoord[:,w,0,:]
+                pb = corrCoord[:,w,1,:]
+                ppoints[:,w,:] = (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                ppoints[:,w,:] = np.nan_to_num(ppoints[:,w,:])
+                ppoints[:,w,:] = (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1)) + ppoints[:,w,:]*(checkmap[:,w]!=0).reshape((VtxNum, 1))
+            for w in range(4,6):
+                pa = ppoints[:,(w-4)*2,:]
+                pb = ppoints[:,(w-4)*2+1,:]  
+                ppoints[:,w,:] = (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                ppoints[:,w,:] = np.nan_to_num(ppoints[:,w,:])
+                ppoints[:,w,:] = (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1)) + ppoints[:,w,:]*(checkmap[:,w]!=0).reshape((VtxNum, 1))
+            w = 6
+            pa = ppoints[:,4,:]
+            pb = ppoints[:,5,:]
+            ppoints[:,w,:] = (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            ppoints[:,w,:] = np.nan_to_num(ppoints[:,w,:])
+            ppoints[:,w,:] = (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1)) + ppoints[:,w,:]*(checkmap[:,w]!=0).reshape((VtxNum, 1))
+            return ppoints[:,6,:]
+            
+        return newVtx
         
     def TransformNmls(self, Nmls, Vtx, Tg, coordGbl=np.zeros(0), BBTrans=np.zeros(0), s=1):
         """
