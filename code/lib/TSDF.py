@@ -31,13 +31,13 @@ class TSDFManager():
     Manager Truncated Signed Distance Function.
     """
 
-    def __init__(self, Size, Image, GPUManager, coords, Tg):
+    def __init__(self, Size, Image, GPUManager, coordC, Tg, bp):
         """
         Constructor
         :param Size: dimension of each axis of the volume
         :param Image: RGBD image to compare
         :param GPUManager: GPU environment for GPU computation
-        :param coords: the local position of each corners of one body part
+        :param coordC: the corners of bounding-box in conacial frame
         :param Tg: transform from the local coordinate to global coordinate
         """
         #dimensions
@@ -71,32 +71,33 @@ class TSDFManager():
         cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Tg)
 
         # calculate the corner weight
-        self.BBNum = coords.shape[0]
-        self.coordsGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=coords)
-        self.BBTrans = np.zeros((coords.shape[0],4,4), dtype=np.float32)
-        self.BBTransGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, self.BBTrans.nbytes)
+        self.coordCGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=coordC)
+        self.coordNewGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, coordC.nbytes)
+
+        self.bp = bp
 
 #######
 ##GPU code
 #####
 
     # Fuse on the GPU
-    def FuseRGBD_GPU(self, Image, BBTrans):
+    def FuseRGBD_GPU(self, Image, coordNew):
         """
         Update the TSDF volume with Image
         :param Image: RGBD image to update to its surfaces
-        :param BBTrans: transform from the first camera pose to the last camera pose of each corner
+        :param coordNew: the corners of bounding-box in new frame
+        :param bp: the indexof body part
         :return: none
         """
         # initialize buffers
         #cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Tg)
         cl.enqueue_write_buffer(self.GPUManager.queue, self.DepthGPU, Image.depth_image)
-        cl.enqueue_write_buffer(self.GPUManager.queue, self.BBTransGPU, BBTrans)
+        cl.enqueue_write_buffer(self.GPUManager.queue, self.coordNewGPU, coordNew)
 
         # fuse data of the RGBD imnage with the TSDF volume 3D model
         self.GPUManager.programs['FuseTSDF'].FuseTSDF(self.GPUManager.queue, (self.Size[0], self.Size[1]), None, \
                                 self.TSDFGPU, self.DepthGPU, self.Param, self.Size_Volume, self.Pose_GPU, \
-                                self.BBTransGPU, np.int32(self.BBNum), self.coordsGPU,\
+                                self.coordCGPU, self.coordNewGPU, np.int16(self.bp), \
                                 self.Calib_GPU, np.int32(Image.Size[0]), np.int32(Image.Size[1]),self.WeightGPU)
 
         # update CPU array. Read the buffer to write in the CPU array.
@@ -107,7 +108,6 @@ class TSDFManager():
         print "TSDFNaN : %d" %(TSDFNaN)
         '''
         cl.enqueue_read_buffer(self.GPUManager.queue, self.WeightGPU, self.Weight).wait()  
-
     
 #####
 #End GPU code

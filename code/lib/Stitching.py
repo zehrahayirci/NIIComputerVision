@@ -116,34 +116,25 @@ class Stitch():
                 wlist.append([3,2])
                 wlist.append([4,5])
                 wlist.append([7,6])
-            elif ind_minxx==1 and ind_minxy==4:
-                wlist.append([0,1])
-                wlist.append([4,5])
-                wlist.append([3,2])
-                wlist.append([7,6])
             elif ind_minxx==3 and ind_minxy==1:
                 wlist.append([0,3])
                 wlist.append([1,2])
                 wlist.append([4,7])
                 wlist.append([5,6])
-            elif ind_minxx==3 and ind_minxy==4:
-                wlist.append([0,3])
-                wlist.append([4,7])
-                wlist.append([1,2])
-                wlist.append([5,6])
-            elif ind_minxx==4 and ind_minxy==1:
-                wlist.append([0,4])
-                wlist.append([1,5])
-                wlist.append([3,7])
-                wlist.append([2,6])
-            elif ind_minxx==4 and ind_minxy==3:
-                wlist.append([0,4])
-                wlist.append([3,7])
-                wlist.append([1,5])
-                wlist.append([2,6])
             else:
                 print "errorQQ?"
                 exit()
+            # special 
+            if( wlist[1][0] == 1 and abs(coordC[1,0]-coordC[2,0])<abs(coordC[1,1]-coordC[2,1]) ):
+                wlist[0][0] = 0
+                wlist[0][1] = 1
+                wlist[1][0] = 1
+                wlist[1][1] = 3
+                wlist[2][0] = 4
+                wlist[2][1] = 5
+                wlist[3][0] = 5
+                wlist[3][1] = 7
+                print wlist
             #get intersect of edges and x-plane
             for w in range(len(wlist)):
                 wpair = wlist[w]
@@ -160,9 +151,11 @@ class Stitch():
                 ppoints[:,w,:] = projectP
                 checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb, axis = 1))*1
                 checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa, axis = 1))*2  
-                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa)*(checkmap[:,w]==0)
-                weights[:,w] += LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
                 weights[:,w] += LA.norm(pa-pb)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+                weights[:,w] = np.nan_to_num(weights[:,w])
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa)*(checkmap[:,w]==0) + weights[:,w]*(checkmap[:,w]!=0)
+                checkmap[:,w] = checkmap[:,w]*(weights[:,w]!=1)*(weights[:,w]!=0)
             wlist.append([0,1])
             wlist.append([2,3])
             for w in range(4, 6):#get intersect of edges and y-plane
@@ -180,9 +173,11 @@ class Stitch():
                 ppoints[:,w,:] = projectP
                 checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
                 checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
-                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0)
-                weights[:,w] += LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
                 weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+                weights[:,w] = np.nan_to_num(weights[:,w])
+                weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0) + weights[:,w]*(checkmap[:,w]!=0)
+                checkmap[:,w] = checkmap[:,w]*(weights[:,w]!=1)*(weights[:,w]!=0)
             w = 6 #get intersect of edges and z-plane
             pa = ppoints[:,4,:]
             pb = ppoints[:,5,:]
@@ -197,30 +192,46 @@ class Stitch():
             ppoints[:,w,:] = projectP
             checkmap[:,w] += (LA.norm(projectP-pa, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pa, axis = 1)>LA.norm(projectP-pb,axis=1))*1
             checkmap[:,w] += (LA.norm(projectP-pb, axis = 1)>LA.norm(pa-pb,axis=1))*(LA.norm(projectP-pb, axis = 1)>LA.norm(projectP-pa,axis=1))*2  
-            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0)
-            weights[:,w] += LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
+            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(projectP-pa, axis = 1)*(checkmap[:,w]==1)
             weights[:,w] += LA.norm(pa-pb,axis=1)/LA.norm(projectP-pb, axis = 1)*(checkmap[:,w]==2)
+            weights[:,w] = np.nan_to_num(weights[:,w])
+            weights[:,w] = LA.norm(projectP-pb, axis = 1)/LA.norm(pb-pa,axis=1)*(checkmap[:,w]==0) + weights[:,w]*(checkmap[:,w]!=0)
+            checkmap[:,w] = checkmap[:,w]*(weights[:,w]!=1)*(weights[:,w]!=0)
+            if ppoints.shape[0]>=1000000:
+                print "QQ"
+                print coordC
+                print checkmap[2162,:]
+                print wlist
+                print Vtx[2162,:]
+                print ppoints[2162,:,:]
             # get new Vtx
             for w in range(0,4):
                 wpair = wlist[w]
                 pa = coordNew[wpair[0],:]
                 pb = coordNew[wpair[1],:]
-                ppoints[:,w,:] =  (pa.reshape((1,3))*weights[:,w].reshape((VtxNum, 1))+pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
-                ppoints[:,w,:] += (pb.reshape((1,3))-pa.reshape((1,3))*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] = (pb.reshape((1,3))-pa.reshape((1,3))*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
                 ppoints[:,w,:] += (pa.reshape((1,3))-pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                ppoints[:,w,:] = np.nan_to_num(ppoints[:,w,:])
+                ppoints[:,w,:] =  (pa.reshape((1,3))*weights[:,w].reshape((VtxNum, 1))+pb.reshape((1,3))*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1)) + ppoints[:,w,:]*(checkmap[:,w]!=0).reshape((VtxNum, 1))
             for w in range(4,6):
                 wpair = wlist[w]
                 pa = ppoints[:,wpair[0],:]
                 pb = ppoints[:,wpair[1],:]
-                ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
-                ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+                ppoints[:,w,:] = (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
                 ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+                ppoints[:,w,:] = np.nan_to_num(ppoints[:,w,:])
+                ppoints[:,w,:] = (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1)) + ppoints[:,w,:]*(checkmap[:,w]!=0).reshape((VtxNum, 1))
             w = 6
             pa = ppoints[:,4,:]
             pb = ppoints[:,5,:]
-            ppoints[:,w,:] =  (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1))
-            ppoints[:,w,:] += (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
+            ppoints[:,w,:] = (pb-pa*(weights[:,w]).reshape((VtxNum, 1)))/(1-weights[:,w]).reshape((VtxNum, 1))*(checkmap[:,w]==1).reshape((VtxNum, 1))
             ppoints[:,w,:] += (pa-pb*(1-weights[:,w]).reshape((VtxNum, 1)))/weights[:,w].reshape((VtxNum, 1))*(checkmap[:,w]==2).reshape((VtxNum, 1))
+            ppoints[:,w,:] = np.nan_to_num(ppoints[:,w,:])
+            ppoints[:,w,:] = (pa*weights[:,w].reshape((VtxNum, 1))+pb*(1-weights[:,w]).reshape((VtxNum, 1)))*(checkmap[:,w]==0).reshape((VtxNum, 1)) + ppoints[:,w,:]*(checkmap[:,w]!=0).reshape((VtxNum, 1))
+            if ppoints.shape[0]>=1000000:
+                print coordNew
+                print ppoints[2162,:,:]
+                print weights[2162,:]
             return ppoints[:,6,:]
         else: # part 10
             #initial
@@ -478,7 +489,7 @@ class Stitch():
         newBBTrans.append(np.identity(4))
         for bp in range(1,len(AllrelatedBone)):
             relatedBoneList = AllrelatedBone[bp]
-            newBB = np.zeros((len(BB[bp]),3))
+            newBB = np.zeros((len(BB[bp]),3), dtype=np.float32)
             newBBTran = np.zeros((len(BB[bp]),4,4), dtype=np.float32)
             for p in range(len(relatedBoneList)):
                 relatedBones = relatedBoneList[p]

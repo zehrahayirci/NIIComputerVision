@@ -69,8 +69,8 @@ class BodyParts():
                 PoseBP[i][j] = self.Tlg[i][j]
 
         # TSDF Fusion of the body part
-        self.TSDFManager = TSDFtk.TSDFManager((X, Y, Z), self.RGBD_BP, self.GPUManager, self.RGBD.coordsL[bp], PoseBP)
-        self.TSDFManager.FuseRGBD_GPU(self.RGBD_BP, self.RGBD.BBTrans[bp])
+        self.TSDFManager = TSDFtk.TSDFManager((X, Y, Z), self.RGBD_BP, self.GPUManager, self.RGBD.coordsGbl[bp], PoseBP, bp)
+        self.TSDFManager.FuseRGBD_GPU(self.RGBD_BP, self.RGBD.coordsGbl[bp])
 
         # Create Mesh
         self.MC = My_MC.My_MarchingCube(self.TSDFManager.Size, self.TSDFManager.res, 0.0, self.GPUManager)
@@ -80,7 +80,7 @@ class BodyParts():
 
         # save with the number of the body part
         bpStr = str(bp)
-        self.MC.SaveToPly("body" + bpStr + ".ply")
+        self.MC.SaveToPly("body0_" + bpStr + ".ply")
         elapsed_time = time.time() - start_time3
         print "SaveBPToPly: %f" % (elapsed_time)
 

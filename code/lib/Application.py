@@ -709,6 +709,7 @@ class Application(tk.Frame):
             BPVtx.append(np.array((0,0,0)))            
             # Updating mesh of each body part
             for bp in range(1,nbBdyPart):
+                print "bp: " + str(bp)
                 # find tranformation from new BB
                 #BB_Pose = Tracker.RegisterBB(newRGBD[0].coordsGbl[bp], preRGBD[0].coordsGbl[bp])
                 #T_Pose[bp] = np.dot(BB_Pose, T_Pose[bp])
@@ -722,12 +723,12 @@ class Application(tk.Frame):
                         PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
 
                 # TSDF Fusion of the body part
-                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].BBTrans[bp])
+                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].coordsGbl[bp])
 
                 # Create Mesh
-                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
+                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
@@ -741,11 +742,11 @@ class Application(tk.Frame):
                     StitchBdy.StitchedFaces = Parts[bp].MC.Faces
                 else:
                     StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp])
-                
 
                 # output mesh in global of each body part
-                #Parts[bp].MC.SaveToPlyExt("bodyGlobal"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp]),Parts[bp].MC.Faces,0)
-            
+                Parts[bp].MC.SaveToPlyExt("GBody"+str(imgk)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp]),Parts[bp].MC.Faces,0)
+                Parts[bp].MC.SaveToPly("body" + str(imgk)+"_" +str(bp) + ".ply")
+
             # projection in 2d space to draw the 3D model(meshes)
             rendering = self.RGBD[0].DrawMesh(rendering,StitchBdy.StitchedVertices,StitchBdy.StitchedNormales,Id4, 1, self.color_tag)
 
