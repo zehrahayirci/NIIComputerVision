@@ -240,29 +240,33 @@ class Stitch():
             ppoints = np.zeros((VtxNum,8,3), dtype=np.float32)
             checkmap = np.zeros((VtxNum, 10))
             # get four coordinates of each Vtx
-            corrCoordIdx = np.one((VtxNum, 4, 2), dtype=np.int32)*-1
+            corrCoordIdx = np.zeros((VtxNum, 4, 2), dtype=np.int32)
+            corrCoordMap = np.zeros((VtxNum))
             line1 = np.array((-coordC[4,1]+coordC[1,1], coordC[4,0]-coordC[1,0], 0,0)) # line separate
             line1[3] = -(line1[0]*coordC[4,0]+line1[1]*coordC[4,1])
             line2 = np.array((-coordC[5,1]+coordC[0,1], coordC[5,0]-coordC[0,0], 0,0))
             line2[3] = -(line2[0]*coordC[0,0]+line2[1]*coordC[0,1])
             line3 = np.array((-coordC[6,1]+coordC[8,1], coordC[6,0]-coordC[8,0], 0,0))
             line3[3] = -(line3[0]*coordC[6,0]+line3[1]*coordC[6,1])
+            corrCoordMap = ((np.dot(Vtx, line1[0:3].T)+line1[3])<0)
             corrCoordIdx[:,0,0] = ((np.dot(Vtx, line1[0:3].T)+line1[3])<0)*1
             corrCoordIdx[:,1,0] = ((np.dot(Vtx, line1[0:3].T)+line1[3])<0)*2
             corrCoordIdx[:,0,1] = ((np.dot(Vtx, line1[0:3].T)+line1[3])<0)*4
             corrCoordIdx[:,1,1] = ((np.dot(Vtx, line1[0:3].T)+line1[3])<0)*3
-            corrCoordIdx[:,0,0] += (corrCoordIdx[:,0,0]==-1)*((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*0
-            corrCoordIdx[:,1,0] += (corrCoordIdx[:,1,0]==-1)*((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*1
-            corrCoordIdx[:,0,1] += (corrCoordIdx[:,0,1]==-1)*((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*5
-            corrCoordIdx[:,1,1] += (corrCoordIdx[:,1,1]==-1)*((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*4
-            corrCoordIdx[:,0,0] += (corrCoordIdx[:,0,0]==-1)*((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*8
-            corrCoordIdx[:,1,0] += (corrCoordIdx[:,1,0]==-1)*((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*0
-            corrCoordIdx[:,0,1] += (corrCoordIdx[:,0,1]==-1)*((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*6
-            corrCoordIdx[:,1,1] += (corrCoordIdx[:,1,1]==-1)*((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*5
-            corrCoordIdx[:,0,0] += (corrCoordIdx[:,0,0]==-1)*((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*7
-            corrCoordIdx[:,1,0] += (corrCoordIdx[:,1,0]==-1)*((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*8
-            corrCoordIdx[:,0,1] += (corrCoordIdx[:,0,1]==-1)*((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*6
-            corrCoordIdx[:,1,1] += (corrCoordIdx[:,1,1]==-1)*((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*7
+            corrCoordIdx[:,0,0] += ((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*0*(corrCoordMap==0)
+            corrCoordIdx[:,1,0] += ((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*1*(corrCoordMap==0)
+            corrCoordIdx[:,0,1] += ((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*5*(corrCoordMap==0)
+            corrCoordIdx[:,1,1] += ((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)*4*(corrCoordMap==0)
+            corrCoordMap += ((np.dot(Vtx, line1[0:3].T)+line1[3])>=0)*((np.dot(Vtx, line2[0:3].T)+line2[3])<0)
+            corrCoordIdx[:,0,0] += ((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*8*(corrCoordMap==0)
+            corrCoordIdx[:,1,0] += ((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*0*(corrCoordMap==0)
+            corrCoordIdx[:,0,1] += ((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*6*(corrCoordMap==0)
+            corrCoordIdx[:,1,1] += ((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)*5*(corrCoordMap==0)
+            corrCoordMap += ((np.dot(Vtx, line2[0:3].T)+line2[3])>=0)*((np.dot(Vtx, line3[0:3].T)+line3[3])<0)
+            corrCoordIdx[:,0,0] += ((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*7*(corrCoordMap==0)
+            corrCoordIdx[:,1,0] += ((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*8*(corrCoordMap==0)
+            corrCoordIdx[:,0,1] += ((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*6*(corrCoordMap==0)
+            corrCoordIdx[:,1,1] += ((np.dot(Vtx, line3[0:3].T)+line3[3])>=0)*7*(corrCoordMap==0)
             corrCoordIdx[:,2:4,:] = corrCoordIdx[:,0:2,:]+9
             # get new corr
             corrCoord = np.zeros((VtxNum, 4,2,3), dtype=float)
