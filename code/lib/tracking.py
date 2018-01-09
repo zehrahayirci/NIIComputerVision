@@ -14,6 +14,7 @@ from math import sin, cos, acos
 import scipy as sp
 import pandas 
 import warnings
+import copy
 
 RGBD = imp.load_source('RGBD', './lib/RGBD.py')
 General = imp.load_source('General', './lib/General.py')
@@ -642,18 +643,23 @@ class Tracker():
         
         return res        
     
-    def RegisterBBMesh(self, coords, VtxList, depthImg, intrinsic, BBTrans_ori):
+    def RegisterBBMesh(self, coordsC, coords, VtxList, depthImg, intrinsic, BBTrans_ori, StitchBdy):
         '''
         refine the transform of corner of each body part by registering vertex with depth image
-        :param coords: the position of corner in first frame
+        :param coordsC: the position of corner in first frame
+        :param coords: the position of corner in new frame
         :param VtxList: vertices of each body part in global coordinate of first frame
         :param depthImg: depth image
         :param intrinsic: intrinsic matrix
         :param BBTrans_ori: original Bounding-boxes transform matrix
+        :StitchBdy: stitchingg object
         :return coords and BBtrans
         '''
         # initial
         BPlist = [12,1,2,11,3,4,13,8,7,14,6,5,9,10] #order
+        #BPlist = [10,9,5,6,14,7,8,13,4,3,11,2,1,12] #order
+        #BPlist = [1,2,12,3,4,11,5,6,14,7,8,13,10,9] #order
+        Id4 = np.identity(4, dtype=np.float32)
         BBTrans = []
         for bp in range(15):
             BBTrans.append(np.zeros((coords[bp].shape[0], 4,4), dtype=np.float32))
@@ -661,44 +667,32 @@ class Tracker():
             BBTrans[bp][:,1,1] = 1
             BBTrans[bp][:,2,2] = 1
             BBTrans[bp][:,3,3] = 1
+
         # for each body part
         for bp in BPlist:
-            print bp
-            coord = coords[bp]
-            Vtx = VtxList[bp]
-            sigma = 0.13
-            if bp==10:
-                sigma = 0.3
+            print "bp " + str(bp)
 
-            #get weight
-            weights = np.zeros((Vtx.shape[0], coord.shape[0]), dtype=np.double)
-            for i in range(coord.shape[0]):
-                weights[:, i] = 1/LA.norm(Vtx-coord[i,:], axis=1)
-            weightsum = np.sum(weights, axis=1)
-            for i in range(coord.shape[0]):
-                weights[:,i] /= weightsum
-
+            coord = copy.copy(coords[bp])
+            for i in range(coords[bp].shape[0]):
+                pt = np.array((0.,0.,0.,1.), dtype=np.float32)
+                pt[0:3] = coord[i,:]
+                coord[i,:] = np.dot(BBTrans[bp][i,:,:], pt.T).T[0:3]
+            Vtx = StitchBdy.TransformVtx(VtxList[bp], coordsC[bp], coord, Id4)
+            BBTransOpt = Id4
             # energy function
-            ##error=deformVtx_function(BBTrans[bp].reshape(coord.shape[0]*4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
-            ##error=deformVtx_function(BBTrans[bp][0].reshape(4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
-            ##print error
-            ##res = sp.optimize.least_squares(deformVtx_function, BBTrans[bp].reshape(coord.shape[0]*4*4), max_nfev=15, args=(Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic))
-            res = sp.optimize.least_squares(deformVtx_function, BBTrans[bp][0].reshape(4*4), max_nfev=30, args=(Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic))
-            #cons=({'type':'eq', 'fun': lambda x: np.array([np.sum(x[[0,1,2,4,5,6,8,9,10]])-1]), 'jac': lambda x: np.array([1,1,1,0,1,1,1,0,1,1,1,0,0,0,0,0])})
-            #res = sp.optimize.minimize(deformVtx_function, BBTrans[bp][0].reshape(4*4), options={'maxiter': 30}, \
-            #args=(Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic), method='Nelder-Mead',\
-            #constraints=cons
-            #)
+            error1=deformVtx_function(Logarithm(Id4), Vtx, depthImg, intrinsic)
+            print error1
+            res = sp.optimize.least_squares(deformVtx_function, Logarithm(Id4), max_nfev=6000, args=(Vtx, depthImg, intrinsic))
             #print res
-            ##BBTrans[bp] = res.x.reshape((coord.shape[0],4,4))
-            BBTrans[bp][0] = res.x.reshape((4,4))
-            ##error=deformVtx_function(BBTrans[bp].reshape(coord.shape[0]*4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
-            ##error=deformVtx_function(BBTrans[bp][0].reshape(4*4), Vtx, BBTrans_ori[bp], weights, depthImg, intrinsic)
-            ##print error
-            #print BBTrans[bp]
+            BBTransOpt = Exponential(res.x)
+            error2=deformVtx_function(Logarithm(BBTransOpt), Vtx, depthImg, intrinsic)
+            print error2
+            if error1<error2:
+                BBTransOpt = Id4
+            #print BBTransOpt
 
-            for i in range(1,coord.shape[0]):
-                BBTrans[bp][1] = BBTrans[bp][0]
+            for i in range(0,coord.shape[0]):
+                BBTrans[bp][i,:,:] = BBTransOpt
 
             # update same corner point
             if bp==1:
@@ -854,10 +848,8 @@ class Tracker():
                 pt = np.array((0.,0.,0.,1.), dtype=np.float32)
                 pt[0:3] = coords[bp][i,:]
                 coords[bp][i,:] = np.dot(BBTrans[bp][i,:,:], pt.T).T[0:3]
+
         return coords, BBTrans_ori
-            
-
-
 
     def RegisterBB(self, bb_cur, bb_prev):
         '''
@@ -1125,54 +1117,45 @@ def RegisterTs_function(Tr, initTr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, 
 
     return term
 
-def deformVtx_function(BBTrans_1D, Vtx, BBTrans_ori, weights, depthImg, intrinsic):
+def deformVtx_function(Qsi, Vtx, depthImg, intrinsic):
     '''
-    :param BBTrans_1D: transform matrix of one bounding-box
+    :param Qsi: Logarithm(transform matrix of one bounding-box)
     :param Vtx: the vertice in global at first frame
-    :param BBTrans_ori: original Bounding-boxes transform matrix from first frame to current frame
-    :param weights: the weight of corners and vtx (sum=1 for each row)
     :param depthImg: the depth Image
     :param intrinsic: intrinsic matrix
     '''
     # 1D->3D
-    ##BBTrans = BBTrans_1D.reshape((BBTrans_1D.shape[0]/16,4,4))
-    BBTrans = BBTrans_1D.reshape((4,4))
+    BBTrans = Exponential(Qsi)
     # normalize
     #BBTrans[3,0:3] = 0
     #BBTrans[3,3] = 1
 
-    # deform vtx
+    # transform
     stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
     pt = np.stack( (Vtx[:,0],Vtx[:,1],Vtx[:,2],stack_pt),axis =1 )
-    newVtx = np.zeros((Vtx.shape[0], 4))
-    for i in range(BBTrans_ori.shape[0]):
-        Pose = BBTrans_ori[i]
-        ##Pose = np.dot(BBTrans[i], Pose)
-        Pose = np.dot(BBTrans, Pose)
-        newVtx[:,0] += np.dot(pt,Pose.T)[:,0]*weights[:,i]
-        newVtx[:,1] += np.dot(pt,Pose.T)[:,1]*weights[:,i]
-        newVtx[:,2] += np.dot(pt,Pose.T)[:,2]*weights[:,i]
-        newVtx[:,3] += np.dot(pt,Pose.T)[:,3]*weights[:,i]
-
+    pt = np.dot(pt, BBTrans.T)
+    Vtx = pt[:,0:3]
+    Vtxold = Vtx
+    
     # project to 2D
     pix = np.array([0., 0., 1.])
-    pix = np.stack((pix for i in range(len(newVtx)) ))
-    newVtx[:,2] = General.in_mat_zero2one(newVtx[:,2])
-    pix[:,0] = newVtx[:,0]/newVtx[:,2]
-    pix[:,1] = newVtx[:,1]/newVtx[:,2]
+    pix = np.stack((pix for i in range(len(Vtx)) ))
+    Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+    pix[:,0] = Vtx[:,0]/Vtx[:,2]
+    pix[:,1] = Vtx[:,1]/Vtx[:,2]
     pix = np.dot( pix, intrinsic.T)
     pix = pix.astype(int)
 
     # get error
     bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
-    error = newVtx[:,2]-depthImg[pix[:,1]*bmap, pix[:,0]*bmap]
-    error = np.abs(error)
-    error = sum(error*bmap+sum(bmap==0)*2)
-    '''
+    error = Vtxold[:,2]-depthImg[pix[:,1]*bmap, pix[:,0]*bmap]
+    error = np.abs(error*error)
+    error = sum(error*bmap+sum(bmap==0)*4)
+    
     a = depthImg>0
     a = a*0.5
     a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.5
     cv2.imshow("", a)
     cv2.waitKey(1)
-    '''
+    
     return error

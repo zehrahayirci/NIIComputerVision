@@ -1026,7 +1026,7 @@ class RGBD():
                 points.append(points[1]+vector+[0.05,0,0])
                 points.append(points[0]+vector+[-0.05,0,0])
 
-            coordGbl =  np.zeros((len(points)*2,3))
+            coordGbl =  np.zeros((len(points)*2,3), dtype=np.float32)
             BBTrans = np.zeros((len(points)*2,4,4), dtype=np.float32)
             # for each line of one body part
             for p in range(len(points)):

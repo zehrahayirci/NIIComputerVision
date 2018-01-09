@@ -672,7 +672,7 @@ class Application(tk.Frame):
             # Transform the bounding-boxes into current image
             newRGBD[0].skeVtx[0] = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], newRGBD[0])
             newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(preRGBD[0].skeVtx[0], preRGBD[0].coordsGbl, preRGBD[0].BBTrans)
-            #newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans)
+            newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(self.RGBD[0].coordsGbl, newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans, StitchBdy)
             
             #GT
             '''
