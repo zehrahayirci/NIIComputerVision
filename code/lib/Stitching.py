@@ -17,6 +17,7 @@ from scipy.interpolate import griddata
 PI = math.pi
 
 General = imp.load_source('General', './lib/General.py')
+DualQuaternion = imp.load_source('DualQuaternion', './lib/DualQuaternionClass.py')
 
 class Stitch():
     """
@@ -32,7 +33,7 @@ class Stitch():
         self.StitchedFaces = 0
         self.StitchedNormales = 0
 
-    def NaiveStitch(self, PartVtx,PartNmls,PartFaces, coordC, coordNew, Tg):
+    def NaiveStitch(self, PartVtx,PartNmls,PartFaces, coordC, coordNew, BBTrNew, Tg):
         """
         Add the vertices and faces of each body parts
         together after transforming them in the global coordinates system
@@ -41,6 +42,7 @@ class Stitch():
         :param PartFaces:  List of faces for a body parts
         :param coordC: the corners of bounding-box in conacial frame
         :param coordNew: the corners of bounding-box in new frame
+        :param BBTrNew: the boundong-boxes' transform matrix of new frame
         :param Tg: the transform matrix from local to global
         :return: none
         """
@@ -50,7 +52,7 @@ class Stitch():
         ConcatNmls = self.StitchedNormales
 
         # tranform the vertices in the global coordinates system
-        PartVertices = self.TransformVtx(PartVtx, coordC, coordNew, Tg, 1)
+        PartVertices = self.TransformVtx(PartVtx, coordC, coordNew, BBTrNew, Tg, 1)
         PartNormales = self.TransformNmls(PartNmls,PartVtx, Tg, 1)
         PartFacets = PartFaces + np.max(ConcatFaces)+1
 
@@ -61,7 +63,7 @@ class Stitch():
         
 
         
-    def TransformVtx(self, Vtx, coordC, coordNew, Tg, s=1):
+    def TransformVtx(self, Vtx, coordC, coordNew, BBTrNew, Tg, s=1):
         """
         Transform the vertices in a system to another system.
         Here it will be mostly used to transform from local system to global coordiantes system
@@ -69,6 +71,7 @@ class Stitch():
         :param coordC: the corners of bounding-box in conacial frame
         :param coordNew: the corners of bounding-box in new frame
         :param Tg: the transform matrix from local to global
+        :param BBTrNew: the boundong-boxes' transform matrix of new frame
         :param s: subsampling factor
         :return: list of transformed vertices
         """
@@ -79,6 +82,44 @@ class Stitch():
         newVtx = np.zeros((Vtx.shape[0],3), dtype=np.float32)
         VtxNum = Vtx.shape[0]
 
+        ## Dual Quaternion
+        coordNum = coordNew.shape[0]
+        weights = np.zeros((VtxNum, coordNum))
+        DQnp =  np.zeros((VtxNum, 2,4))
+        for c in range(coordNum):
+            weights[:,c] = LA.norm(Vtx-coordC[c,:], axis=1)
+            weights[:,c] = np.exp(-weights[:,c]*weights[:,c]/2/0.13/0.13)
+            tempQR = General.getQuaternionfromMatrix(BBTrNew[c,:,:]) 
+            tempT = BBTrNew[c,0:3,3]
+            tempDQ = DualQuaternion.DualQuaternion([tempQR[0], tempQR[1], tempQR[2], tempQR[3]],[tempT[0],tempT[1],tempT[2]])
+            tempDQ = tempDQ.normalize
+            DQnp[:,0,0] += weights[:,c]*tempDQ.mReal.w
+            DQnp[:,0,1] += weights[:,c]*tempDQ.mReal.x
+            DQnp[:,0,2] += weights[:,c]*tempDQ.mReal.y
+            DQnp[:,0,3] += weights[:,c]*tempDQ.mReal.z
+            DQnp[:,1,0] += weights[:,c]*tempDQ.mDual.w
+            DQnp[:,1,1] += weights[:,c]*tempDQ.mDual.x
+            DQnp[:,1,2] += weights[:,c]*tempDQ.mDual.y
+            DQnp[:,1,3] += weights[:,c]*tempDQ.mDual.z
+        DQnp /= np.sum(weights, axis=1).reshape((VtxNum,1,1))
+        for v in range(VtxNum):
+            TrDQ = DualQuaternion.DualQuaternion()
+            TrDQ.mReal.w = DQnp[v,0,0]
+            TrDQ.mReal.x = DQnp[v,0,1]
+            TrDQ.mReal.y = DQnp[v,0,2]
+            TrDQ.mReal.z = DQnp[v,0,3]
+            TrDQ.mDual.w = DQnp[v,1,0]
+            TrDQ.mDual.x = DQnp[v,1,1]
+            TrDQ.mDual.y = DQnp[v,1,2]
+            TrDQ.mDual.z = DQnp[v,1,3]
+            Tr = TrDQ.dualQuaternionToMatrix()
+            pt = np.ones(4)
+            pt[0:3] = Vtx[v, 0:3]
+            pt = np.dot(pt, Tr.T)
+            Vtx[v,:] = pt[0:3]
+        return Vtx
+
+        # extrapolation
         if coordC.shape[0]==8:
             #initial
             weights = np.zeros((VtxNum,10), dtype=np.float32)
@@ -501,12 +542,22 @@ class Stitch():
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
+                newDQ = DualQuaternion.DualQuaternion()
+                newDQ.mReal.w = 0
                 for r in range(len(relatedBones)):
                     relatedBone = relatedBones[r]
                     bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
                     weights.append(1/np.linalg.norm(bonecenter-point))
-                    newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
-                newBBTran[p] /= sum(weights)
+                    #newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
+                    tempQR = General.getQuaternionfromMatrix(self.boneTrans[relatedBone])
+                    tempT = self.boneTrans[relatedBone][0:3,3]
+                    tempDQ = DualQuaternion.DualQuaternion([tempQR[0], tempQR[1], tempQR[2], tempQR[3]],[tempT[0],tempT[1],tempT[2]])
+                    tempDQ = tempDQ.normalize
+                    newDQ = newDQ+tempDQ*weights[r]
+                #newBBTran[p] /= sum(weights)
+                newDQ *= 1/sum(weights)
+                newDQ = newDQ.normalize
+                newBBTran[p,:,:] = newDQ.dualQuaternionToMatrix()
                 newBB[p,:] = np.dot(newBBTran[p,:,:], pt.T)[0:3]
                 newBBTran[p, :, :] = np.dot(newBBTran[p,:,:], BBTrans[bp][p,:,:])
             for p in range(len(relatedBoneList),len(relatedBoneList)*2):
@@ -515,12 +566,22 @@ class Stitch():
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
+                newDQ = DualQuaternion.DualQuaternion()
+                newDQ.mReal.w = 0
                 for r in range(len(relatedBones)):
                     relatedBone = relatedBones[r]
                     bonecenter = prevPos[bonelist[relatedBone][0]]/2+prevPos[bonelist[relatedBone][1]]/2
                     weights.append(1/np.linalg.norm(bonecenter-point))
-                    newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
-                newBBTran[p] /= sum(weights)
+                    #newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
+                    tempQR = General.getQuaternionfromMatrix(self.boneTrans[relatedBone])
+                    tempT = self.boneTrans[relatedBone][0:3,3]
+                    tempDQ = DualQuaternion.DualQuaternion([tempQR[0], tempQR[1], tempQR[2], tempQR[3]],[tempT[0],tempT[1],tempT[2]])
+                    tempDQ = tempDQ.normalize
+                    newDQ = newDQ+tempDQ*weights[r]
+                #newBBTran[p] /= sum(weights)
+                newDQ *= 1/sum(weights)
+                newDQ = newDQ.normalize
+                newBBTran[p,:,:] = newDQ.dualQuaternionToMatrix()
                 newBB[p,:] = np.dot(newBBTran[p,:,:], pt.T)[0:3]
                 newBBTran[p, :, :] = np.dot(newBBTran[p,:,:], BBTrans[bp][p,:,:])
             newBBs.append(newBB)

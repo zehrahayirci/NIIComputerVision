@@ -3,7 +3,10 @@
 *.ply
 *.npy
 *~
+*.blend
+*.blend1
 code/CloudsOfPointsCompare.py
 code/TEST*
 code/meshes
+code_dualquaternion
 __pycache__

@@ -461,15 +461,15 @@ class Application(tk.Frame):
                 for j in range(4):
                     PoseBP[bp][i][j] = Tg[bp][i][j]
             # Concatenate all the body parts for stitching purpose
-            BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp]))
+            BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp]))
             if bp == bpstart  :
-                StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp])
+                StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp])
                 StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices,PoseBP[bp])
                 StitchBdy.StitchedFaces = Parts[bp].MC.Faces
             else:
-                StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp])
+                StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp])
             # save vertex in global of each body part
-            Parts[1].MC.SaveToPlyExt("GBody"+str(self.Index)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp],PoseBP[bp]),Parts[bp].MC.Faces)
+            Parts[1].MC.SaveToPlyExt("GBody"+str(self.Index)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp]),Parts[bp].MC.Faces)
 
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody"+str(self.Index)+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
@@ -484,6 +484,7 @@ class Application(tk.Frame):
         bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         rendering_oneVtx = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         rendering = self.RGBD[0].DrawMesh(rendering,StitchBdy.StitchedVertices,StitchBdy.StitchedNormales,Id4, 1, self.color_tag)       
+        cornernal =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         # show segmentation result
         img_label_temp = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         img_label_temp = self.DrawColors2D(self.RGBD[0], img_label_temp)
@@ -529,6 +530,26 @@ class Application(tk.Frame):
             rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,1] = 500
             rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,2] = 500
             '''
+            # get one corner normal
+            corner_nal = np.zeros((2,3))
+            corner_nal[1][1] -= 0.15
+            corner_nal[1] = np.dot(corner_nal[1], self.RGBD[0].BBTrans[4][2,0:3,0:3].T)
+            corner_nal[0] = self.RGBD[0].coordsGbl[4][2,:]
+            corner_nal[1] += corner_nal[0]
+            cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
+            cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
+            rr,cc,val = line_aa(cornerpt1[1],cornerpt1[0],cornerpt2[1],cornerpt2[0])
+            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+            cornernal[rr,cc, 0] = 250
+            cornernal[rr,cc, 1] = 100
+            cornernal[rr,cc, 2] = 250
+            cornernal[cornerpt1[1], cornerpt1[0], 0] = 100
+            cornernal[cornerpt1[1], cornerpt1[0], 1] = 250
+            cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
+            cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
+            cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
+            cornernal[cornerpt2[1], cornerpt2[0], 2] = 100
             # Get corners of OBB
             pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],Id4)
             pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
@@ -609,7 +630,7 @@ class Application(tk.Frame):
                 bbrendering[rr,cc, 1] = 230
                 bbrendering[rr,cc, 2] = 250
         # mix
-        result_stack = np.concatenate((rendering*0.0020+img_depthmap*0.0020+rendering_oneVtx*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8), bbrendering*0.0020+img_depthmap*0.0020+img_skeleton*0.002), axis=1)
+        result_stack = np.concatenate((rendering*0.0020+img_depthmap*0.0020+rendering_oneVtx*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8), bbrendering*0.001+img_depthmap*0.0020+img_skeleton*0.001+cornernal*0.003), axis=1)
         #result_stack = np.concatenate((result_stack, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label), axis=1)
         print ("frame"+str(self.Index))
         cv2.imshow("BB", result_stack)
@@ -672,8 +693,8 @@ class Application(tk.Frame):
             # Transform the bounding-boxes into current image
             newRGBD[0].skeVtx[0] = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], newRGBD[0])
             newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(preRGBD[0].skeVtx[0], preRGBD[0].coordsGbl, preRGBD[0].BBTrans)
-            newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(self.RGBD[0].coordsGbl, newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans, StitchBdy)
-            
+            #newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(self.RGBD[0].coordsGbl, newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans, StitchBdy)
+
             #GT
             '''
             for bp in range(1, nbBdyPart):
@@ -704,6 +725,7 @@ class Application(tk.Frame):
             rendering_originmesh = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             rendering_oneVtx = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            cornernal =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
 
             BPVtx = []
             BPVtx.append(np.array((0,0,0)))            
@@ -723,28 +745,28 @@ class Application(tk.Frame):
                         PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
 
                 # TSDF Fusion of the body part
-                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].coordsGbl[bp])
+                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].coordsGbl[bp])
 
                 # Create Mesh
-                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
+                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
                 nb_facesGlo = nb_facesGlo +Parts[bp].MC.nb_faces[0]
                 
                 # Stitch all the body parts
-                BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], PoseBP[bp]))
+                BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp]))
                 if bp ==1 :
-                    StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp])
+                    StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], PoseBP[bp])
                     StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, Tg[bp])
                     StitchBdy.StitchedFaces = Parts[bp].MC.Faces
                 else:
-                    StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp])
+                    StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], PoseBP[bp])
 
                 # output mesh in global of each body part
-                Parts[bp].MC.SaveToPlyExt("GBody"+str(imgk)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], PoseBP[bp]),Parts[bp].MC.Faces,0)
+                Parts[bp].MC.SaveToPlyExt("GBody"+str(imgk)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], PoseBP[bp]),Parts[bp].MC.Faces,0)
                 Parts[bp].MC.SaveToPly("body" + str(imgk)+"_" +str(bp) + ".ply")
 
             # projection in 2d space to draw the 3D model(meshes)
@@ -760,7 +782,7 @@ class Application(tk.Frame):
                         tempVtx[tempt,:] = newRGBD[0].Vtx[i,j,:]
                         tempt+=1
             rendering_originmesh = self.RGBD[0].DrawMesh(rendering_originmesh,tempVtx,tempVtx,Id4, 1, 1)
-            Parts[bp].MC.SaveToPlyExt("wholeBody"+str(imgk)+"_ori.ply",tempt,0,StitchBdy.TransformVtx(tempVtx,self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],Id4),[],0)
+            Parts[bp].MC.SaveToPlyExt("wholeBody"+str(imgk)+"_ori.ply",tempt,0,StitchBdy.TransformVtx(tempVtx,self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4),[],0)
             #'''
 
             formerIdx = imgk
@@ -773,7 +795,7 @@ class Application(tk.Frame):
             Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
             # save the coordinate of the body part
             for bp in range(bpstart, nbBdyPart):
-                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],Id4), bp)
+                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp],Id4), bp)
 
 
             # projection in 2d space to draw the 3D model(meshes)
@@ -823,6 +845,25 @@ class Application(tk.Frame):
                 rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,1] = 500
                 rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,2] = 500
                 '''
+                # get one corner normal
+                corner_nal = np.zeros((2,3))
+                corner_nal[1][1] -= 0.15
+                corner_nal[1] = np.dot(corner_nal[1], newRGBD[0].BBTrans[4][2,0:3,0:3].T)
+                corner_nal[0] += newRGBD[0].coordsGbl[4][2,:]
+                corner_nal[1] += corner_nal[0]
+                cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
+                cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
+                rr,cc,val = line_aa(cornerpt1[1],cornerpt1[0],cornerpt2[1],cornerpt2[0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                cornernal[rr,cc, 0] = 250
+                cornernal[rr,cc, 1] = 100
+                cornernal[rr,cc, 2] = 250
+                cornernal[cornerpt1[1], cornerpt1[0], 0] = 100
+                cornernal[cornerpt1[1], cornerpt1[0], 1] = 250
+                cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
+                cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
+                cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
                 # Get corners of OBB
                 pt = self.RGBD[0].GetProjPts2D_optimize(newRGBD[0].coordsGbl[i], Id4)
                 pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
@@ -904,7 +945,7 @@ class Application(tk.Frame):
                     bbrendering[rr,cc, 2] = 250
                 
             # mix
-            result_stack = np.concatenate((rendering*0.0020+img_depthmap*0.0020+rendering_oneVtx*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8), bbrendering*0.0020+img_depthmap*0.0020+img_skeleton*0.002), axis=1)
+            result_stack = np.concatenate((rendering*0.0020+img_depthmap*0.0020+rendering_oneVtx*0.0025, np.ones((self.Size[0],1,3), dtype = np.uint8), bbrendering*0.001+img_depthmap*0.0020+img_skeleton*0.001+cornernal*0.003), axis=1)
             #result_stack = np.concatenate((result_stack, np.ones((self.Size[0],1,3), dtype = np.uint8)*255, img_label), axis=1)
             print ("frame"+imgkStr)
             cv2.imshow("BB", result_stack)

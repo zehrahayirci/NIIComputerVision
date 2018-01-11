@@ -173,3 +173,32 @@ def getBodypartPoseIndex(bp):
     if bp==14:
         pos = [19]
     return pos
+
+def getQuaternionfromMatrix(mat):
+    quat = [0,0,0,0]
+    tr = mat[0,0]+mat[1,1]+mat[2,2]
+    if tr>0:
+        S = pow(tr+1, 0.5)*2
+        quat[0] = 0.25*S
+        quat[1] = (mat[2,1]-mat[1,2])/S
+        quat[2] = (mat[0,2]-mat[2,0])/S
+        quat[3] = (mat[1,0]-mat[0,1])/S
+    elif (mat[0,0]>mat[1,1]) and (mat[0,0]>mat[2,2]):
+        S = pow(1+mat[0,0]-mat[1,1]-mat[2,2], 0.5)*2
+        quat[0] = (mat[2,1]-mat[1,2])/S
+        quat[1] = 0.25*S
+        quat[2] = (mat[0,1]+mat[1,0])/S
+        quat[3] = (mat[0,2]+mat[2,0])/S
+    elif mat[1,1]>mat[2,2]:
+        S = pow(1+mat[1,1]-mat[0,0]-mat[2,2],0.5)*2
+        quat[0] = (mat[0,2]-mat[2,0])/S
+        quat[1] = (mat[0,1]+mat[1,0])/S
+        quat[2] = 0.25*S
+        quat[3] = (mat[1,2]+mat[2,1])/S
+    else:
+        S = pow(1+mat[2,2]-mat[0,0]-mat[1,1], 0.5)*2
+        quat[0] = (mat[1,0]-mat[0,1])/S
+        quat[1] = (mat[0,2]+mat[2,0])/S
+        quat[2] = (mat[1,2]+mat[2,1])/S
+        quat[3] = 0.25*S
+    return quat
