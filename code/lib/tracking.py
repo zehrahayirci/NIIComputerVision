@@ -15,6 +15,7 @@ import scipy as sp
 import pandas 
 import warnings
 import copy
+from sklearn.neighbors import NearestNeighbors
 
 RGBD = imp.load_source('RGBD', './lib/RGBD.py')
 General = imp.load_source('General', './lib/General.py')
@@ -70,7 +71,7 @@ def Logarithm(Mat):
     '''
     Inverse of Exponential function. Used to create known transform matrix and test.
     :param Mat: 4*4 transformation matrix
-    :return: a 6D vector containing rotation and translation parameters
+translation    :return: a 6D vector containing rotation and translation parameters
     '''
     trace = Mat[0,0]+Mat[1,1]+Mat[2,2]
     theta = acos((trace-1.0)/2.0)
@@ -161,6 +162,7 @@ class Tracker():
                         if (LA.norm(pt[0:3]) < 0.1):
                             continue
                         pt = np.dot(res, pt)
+                        pt /= pt[3]
                         nmle[0:3] = Image1.Nmls[i*l,j*l][0:3]
                         if (LA.norm(nmle) == 0.):
                             continue
@@ -274,6 +276,7 @@ class Tracker():
                 pix = np.dstack((pix,stack_pix))
                 pt = np.dstack((Image1.Vtx[ ::l, ::l, :],stack_pt))
                 pt = np.dot(res,pt.transpose(0,2,1)).transpose(1,2,0)
+                pt /= pt[:,3].reshape((pt.shape[0], 1))
               
                 # transform normales
                 nmle = np.zeros((Image1.Size[0], Image1.Size[1],Image1.Size[2]), dtype = np.float32)
@@ -407,6 +410,7 @@ class Tracker():
                     if (LA.norm(pt[0:3]) < 0.1):
                         continue
                     pt = np.dot(res, pt)
+                    pt /= pt[3]
                     nmle[0:3] = MeshNmls[i][0:3]
                     if (LA.norm(nmle) == 0.):
                         continue
@@ -530,6 +534,7 @@ class Tracker():
 
                 # transform closer vertices to camera pose
                 pt = np.dot(res,pt.T).T
+                pt /= pt[:,3].reshape((pt.shape[0], 1))
                 # transform closer normales to camera pose
                 nmle = np.zeros((Size[0], Size[1]), dtype = np.float32)
                 nmle[ ::l,:] = np.dot(res[0:3,0:3],MeshNmls[ ::l,:].T).T
@@ -643,6 +648,304 @@ class Tracker():
         
         return res        
     
+    def RegisterSkeleton(self, skePre, skeNew, VtxList, pointcloud, depthImg, intrinsic, planesF):
+        '''
+        refine the position of skeleton of each body part
+        '''
+
+        bonelist = [[5,6],[4,5],[20,4],[9,10],[8,9],[20,8], \
+        [13,14],[12,13],[0,12],[17,18],[16,17],[0,16], \
+        [20,2],[2,3],[1,20],[0,1], \
+        [6,7], [10,11],[14,15],[18,19]]
+        boneParent = [1,14,14,4,14,14,7,15,8,10,15,11,14,14,15,15,0,3,6,9]
+        boneorder = [15,14,13,1,0,4,3,7,10,6,9,16,17,18,19]
+        bone2bp = [1,2,10,3,4,10,8,7,10,6,5,10,9,9,10,10,12,11,13,14]
+        
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(pointcloud)
+
+        for bIdx in boneorder:
+            Vtx = VtxList[bone2bp[bIdx]]
+            planeF = planesF[bone2bp[bIdx]]
+
+            # get boolean map
+            if bIdx==14:
+                planeF = planeF*-1
+            bone = bonelist[bIdx]
+            v1 = skeNew[bone[1]]-skeNew[bone[0]]
+            v2 = skePre[bone[1]]-skePre[bone[0]]
+            R = General.GetRotatefrom2Vector(v2, v1)
+            R_T = np.identity(4)
+            R_T[0:3,0:3] = R
+            T_T = np.identity(4)
+            T_T[0:3,3] = skePre[bone[0]]
+            T1_T = np.identity(4)
+            T1_T[0:3,3] = skeNew[bone[0]]
+            boneTrans = np.dot(T1_T, np.dot(R_T, LA.inv(T_T)))
+            boneP = bonelist[boneParent[bIdx]]
+            '''
+            boneP = bonelist[boneParent[bIdx]]
+            v1 = skeNew[boneP[1]]-skeNew[boneP[0]]
+            v2 = skePre[boneP[1]]-skePre[boneP[0]]
+            R = General.GetRotatefrom2Vector(v2, v1)
+            R_T = np.identity(4)
+            R_T[0:3,0:3] = R
+            T_T = np.identity(4)
+            T_T[0:3,3] = skeVtx_prev[boneP[0]]
+            T1_T = np.identity(4)
+            T1_T[0:3,3] = skeVtx_cur[boneP[0]]
+            bonePTrans = np.dot(T1_T, np.dot(R_T, LA.inv(T_T)))
+            '''
+            weight = np.dot(Vtx,planeF[0:3].T)+planeF[3]
+            wmap = weight>0
+            weightspara = 0.02
+            weight = np.exp(-weight*weight/2/weightspara/weightspara)
+            wmap = wmap*(weight<0.1)
+            Vtx = np.delete(Vtx, np.where(wmap==0), axis=0)
+            
+            '''
+            displace = np.zeros((3))
+            error1= joint_function(displace, skeNew[bone[1]], skeNew[bone[0]],  v2, T_T, T1_T, Vtx, depthImg, intrinsic)
+            print error1
+            res = sp.optimize.minimize(joint_function, displace, method='Nelder-Mead', args=(skeNew[bone[1]], skeNew[bone[0]], v2, T_T, T1_T, Vtx, depthImg, intrinsic), options={'maxiter':80})
+            error2= joint_function(res.x, skeNew[bone[1]], skeNew[bone[0]], v2, T_T, T1_T, Vtx, depthImg, intrinsic)
+            print error2
+            if error2<error1:
+                skeNew[bone[1]] += res.x
+            '''
+
+            ## icp
+            stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+            pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+            pt = np.dot(pt, boneTrans.T)
+            pt /= pt[:,3].reshape((pt.shape[0], 1))
+            Vtx = pt[:,0:3]
+
+            '''
+            # testing
+            Vtx = pt[:,0:3]
+            pix = np.array([0., 0., 1.])
+            pix = np.stack((pix for i in range(len(Vtx)) ))
+            Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+            pix[:,0] = Vtx[:,0]/Vtx[:,2]
+            pix[:,1] = Vtx[:,1]/Vtx[:,2]
+            pix = np.dot( pix, intrinsic.T)
+            pix = pix.astype(int)
+            bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+            a = depthImg>0
+            a = a*0.4
+            a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+            cv2.imshow("initial", a)
+            cv2.waitKey(1)
+            '''
+            
+            for iter in range(10):
+                Vtx_src_cent = np.mean(pt[:,0:3], axis = 0)
+                Vtx_src = pt[:,0:3] - Vtx_src_cent.reshape((1,3))
+
+                indices = nbrs.kneighbors(pt[:,0:3], return_distance=False)
+                Vtx_dis = pointcloud[indices[:,0]]
+                Vtx_dis_cent =  np.mean(Vtx_dis, axis = 0)
+                Vtx_dis = Vtx_dis - Vtx_dis_cent.reshape((1,3))
+
+                # optimization
+                R = np.identity(3)
+                res = sp.optimize.least_squares(ICP_R_ls, R.reshape((9)), args=(Vtx_src, Vtx_dis))
+                R = res.x.reshape((3,3))
+                
+                # SVD
+                H = np.dot(Vtx_src.T, Vtx_dis)
+                U,S,V = LA.svd(H)
+                '''
+                R = np.dot(V,U.T)
+                if LA.det(R)<0:
+                    V[2,:] *= -1
+                    R = np.dot(V,U.T)
+                '''
+
+                # get translation
+                T = -np.dot(R,Vtx_src_cent.T)+Vtx_dis_cent.T
+                newTr = np.identity(4)
+                newTr[0:3,0:3] = R
+                newTr[0:3,3] = T
+                boneTrans = np.dot(newTr, boneTrans)
+                pt = np.dot(pt, newTr.T)
+                
+                '''
+                # testing
+                Vtx = pt[:,0:3]
+                pix = np.array([0., 0., 1.])
+                pix = np.stack((pix for i in range(len(Vtx)) ))
+                Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+                pix[:,0] = Vtx[:,0]/Vtx[:,2]
+                pix[:,1] = Vtx[:,1]/Vtx[:,2]
+                pix = np.dot( pix, intrinsic.T)
+                pix = pix.astype(int)
+                bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+                a = depthImg>0
+                a = a*0.4
+                a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+                cv2.imshow("", a)
+                #cv2.waitKey()
+                # testing
+                Vtx = pointcloud[indices[:,0]]
+                pix = np.array([0., 0., 1.])
+                pix = np.stack((pix for i in range(len(Vtx)) ))
+                Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+                pix[:,0] = Vtx[:,0]/Vtx[:,2]
+                pix[:,1] = Vtx[:,1]/Vtx[:,2]
+                pix = np.dot( pix, intrinsic.T)
+                pix = pix.astype(int)
+                bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+                a = depthImg>0
+                a = a*0.4
+                a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+                cv2.imshow("nn", a)
+                cv2.waitKey()
+                '''
+
+
+            pt = np.ones(4)
+            pt[0:3] = skePre[bone[1]]
+            skeNew[bone[1]] = np.dot(boneTrans, pt)[0:3]
+
+                
+        return skeNew
+    
+    def RegisterBoneTr(self, boneTransList, VtxList, pointcloud, depthImg, intrinsic, planesF):
+        '''
+        refine the boneTransform of each body part
+        '''
+
+        bonelist = [[5,6],[4,5],[20,4],[9,10],[8,9],[20,8], \
+        [13,14],[12,13],[0,12],[17,18],[16,17],[0,16], \
+        [20,2],[2,3],[1,20],[0,1], \
+        [6,7], [10,11],[14,15],[18,19]]
+        boneParent = [1,14,14,4,14,14,7,15,8,10,15,11,14,14,15,15,0,3,6,9]
+        boneorder = [15,14,13,1,0,4,3,7,10,6,9,16,17,18,19]
+        bone2bp = [1,2,10,3,4,10,8,7,10,6,5,10,9,9,10,10,12,11,13,14]
+        
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(pointcloud)
+
+        for bIdx in boneorder:
+            Vtx = VtxList[bone2bp[bIdx]]
+            planeF = planesF[bone2bp[bIdx]]
+            boneTrans = np.identity(4, dtype=np.float32)
+            boneTrans[:] = boneTransList[bIdx,:,:]
+
+            weight = np.dot(Vtx,planeF[0:3].T)+planeF[3]
+            wmap = weight>0
+            weightspara = 0.02
+            weight = np.exp(-weight*weight/2/weightspara/weightspara)
+            wmap = wmap*(weight<0.1)
+            #Vtx = np.delete(Vtx, np.where(wmap==0), axis=0)
+            
+            '''
+            displace = np.zeros((3))
+            error1= joint_function(displace, skeNew[bone[1]], skeNew[bone[0]],  v2, T_T, T1_T, Vtx, depthImg, intrinsic)
+            print error1
+            res = sp.optimize.minimize(joint_function, displace, method='Nelder-Mead', args=(skeNew[bone[1]], skeNew[bone[0]], v2, T_T, T1_T, Vtx, depthImg, intrinsic), options={'maxiter':80})
+            error2= joint_function(res.x, skeNew[bone[1]], skeNew[bone[0]], v2, T_T, T1_T, Vtx, depthImg, intrinsic)
+            print error2
+            if error2<error1:
+                skeNew[bone[1]] += res.x
+            '''
+
+            ## icp
+            stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+            pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+            pt_temp = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+            pt = np.dot(pt, boneTrans.T)
+            pt /= pt[:,3].reshape((pt.shape[0], 1))
+            Vtx = pt[:,0:3]
+
+            
+            # testing
+            Vtx = pt[:,0:3]
+            pix = np.array([0., 0., 1.])
+            pix = np.stack((pix for i in range(len(Vtx)) ))
+            Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+            pix[:,0] = Vtx[:,0]/Vtx[:,2]
+            pix[:,1] = Vtx[:,1]/Vtx[:,2]
+            pix = np.dot( pix, intrinsic.T)
+            pix = pix.astype(int)
+            bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+            a = depthImg>0
+            a = a*0.4
+            a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+            cv2.imshow("initial", a)
+            cv2.waitKey(1)
+            
+            
+            for iter in range(20):
+                Vtx_src_cent = np.mean(pt[:,0:3], axis = 0)
+                Vtx_src = pt[:,0:3] - Vtx_src_cent.reshape((1,3))
+
+                indices = nbrs.kneighbors(pt[:,0:3], return_distance=False)
+                Vtx_dis = pointcloud[indices[:,0]]
+                Vtx_dis_cent =  np.mean(Vtx_dis, axis = 0)
+                Vtx_dis = Vtx_dis - Vtx_dis_cent.reshape((1,3))
+
+                # optimization
+                '''
+                R = np.identity(3)
+                res = sp.optimize.least_squares(ICP_R_ls, R.reshape((9)), args=(Vtx_src, Vtx_dis))
+                R = res.x.reshape((3,3))
+                '''
+
+                # SVD
+                H = np.dot(Vtx_src.T, Vtx_dis)
+                U,S,V = LA.svd(H)
+                R = np.dot(V.T,U.T)
+                if LA.det(R)<0:
+                    V[2,:] *= -1
+                    R = np.dot(V.T,U.T)
+                
+
+                # get translation
+                T = -np.dot(R,Vtx_src_cent.T)+Vtx_dis_cent.T
+                newTr = np.identity(4)
+                newTr[0:3,0:3] = R
+                newTr[0:3,3] = T
+                boneTrans = np.dot(newTr, boneTrans)
+                pt = np.dot(pt_temp, boneTrans.T)
+                
+                
+                # testing
+                Vtx = pt[:,0:3]
+                pix = np.array([0., 0., 1.])
+                pix = np.stack((pix for i in range(len(Vtx)) ))
+                Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+                pix[:,0] = Vtx[:,0]/Vtx[:,2]
+                pix[:,1] = Vtx[:,1]/Vtx[:,2]
+                pix = np.dot( pix, intrinsic.T)
+                pix = pix.astype(int)
+                bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+                a = depthImg>0
+                a = a*0.4
+                a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+                cv2.imshow("", a)
+                #cv2.waitKey()
+                # testing
+                Vtx = pointcloud[indices[:,0]]
+                pix = np.array([0., 0., 1.])
+                pix = np.stack((pix for i in range(len(Vtx)) ))
+                Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+                pix[:,0] = Vtx[:,0]/Vtx[:,2]
+                pix[:,1] = Vtx[:,1]/Vtx[:,2]
+                pix = np.dot( pix, intrinsic.T)
+                pix = pix.astype(int)
+                bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+                a = depthImg>0
+                a = a*0.4
+                a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+                cv2.imshow("nn", a)
+                cv2.waitKey(1)
+                
+                
+            boneTransList[bIdx,:,:] = boneTrans[:,:]
+                
+        return boneTransList
+
     def RegisterBBMesh(self, coordsC, coords, VtxList, depthImg, intrinsic, BBTrans_ori, StitchBdy):
         '''
         refine the transform of corner of each body part by registering vertex with depth image
@@ -676,19 +979,22 @@ class Tracker():
             for i in range(coords[bp].shape[0]):
                 pt = np.array((0.,0.,0.,1.), dtype=np.float32)
                 pt[0:3] = coord[i,:]
-                coord[i,:] = np.dot(BBTrans[bp][i,:,:], pt.T).T[0:3]
+                pt = np.dot(BBTrans[bp][i,:,:], pt.T).T
+                pt /= pt[3]
+                coord[i,:] = pt[0:3]
             Vtx = StitchBdy.TransformVtx(VtxList[bp], coordsC[bp], coord, Id4)
             BBTransOpt = Id4
             # energy function
             error1=deformVtx_function(Logarithm(Id4), Vtx, depthImg, intrinsic)
             print error1
-            res = sp.optimize.least_squares(deformVtx_function, Logarithm(Id4), max_nfev=6000, args=(Vtx, depthImg, intrinsic))
+            #res = sp.optimize.least_squares(deformVtx_function, Logarithm(Id4), max_nfev=50, args=(Vtx, depthImg, intrinsic))
+            res = sp.optimize.minimize(deformVtx_function, Logarithm(Id4), method='Nelder-Mead', args=(Vtx, depthImg, intrinsic), options={'maxiter':80})
             #print res
             BBTransOpt = Exponential(res.x)
             error2=deformVtx_function(Logarithm(BBTransOpt), Vtx, depthImg, intrinsic)
             print error2
-            if error1<error2:
-                BBTransOpt = Id4
+            #if error1<error2:
+            #    BBTransOpt = Id4
             #print BBTransOpt
 
             for i in range(0,coord.shape[0]):
@@ -847,7 +1153,9 @@ class Tracker():
                 BBTrans_ori[bp][i,:,:] = np.dot(BBTrans[bp][i,:,:], BBTrans_ori[bp][i,:,:])
                 pt = np.array((0.,0.,0.,1.), dtype=np.float32)
                 pt[0:3] = coords[bp][i,:]
-                coords[bp][i,:] = np.dot(BBTrans[bp][i,:,:], pt.T).T[0:3]
+                pt = np.dot(BBTrans[bp][i,:,:], pt.T).T
+                pt /= pt[3]
+                coords[bp][i,:] = pt[0:3]
 
         return coords, BBTrans_ori
 
@@ -995,6 +1303,7 @@ def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
     pt = np.stack((MeshVtx[:,0],MeshVtx[:,1],MeshVtx[:,2],stack_pt),axis = 1)
     # transform vertices to camera pose
     pt = np.dot(Tr, pt.T).T
+    pt /= pt[:,3].reshape((pt.shape[0], 1))
     # project to 2D coordinate
     lpt = np.split(pt, 4, axis=1)
     lpt[2] = General.in_mat_zero2one(lpt[2])
@@ -1134,6 +1443,7 @@ def deformVtx_function(Qsi, Vtx, depthImg, intrinsic):
     stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
     pt = np.stack( (Vtx[:,0],Vtx[:,1],Vtx[:,2],stack_pt),axis =1 )
     pt = np.dot(pt, BBTrans.T)
+    pt /= pt[:,3].reshape((pt.shape[0], 1))
     Vtx = pt[:,0:3]
     Vtxold = Vtx
     
@@ -1150,12 +1460,58 @@ def deformVtx_function(Qsi, Vtx, depthImg, intrinsic):
     bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
     error = Vtxold[:,2]-depthImg[pix[:,1]*bmap, pix[:,0]*bmap]
     error = np.abs(error*error)
-    error = sum(error*bmap+sum(bmap==0)*4)
+    error = sum(error*bmap+sum(bmap==0)*4)+sum(depthImg[pix[:,1]*bmap, pix[:,0]*bmap]<=0)*2
     
     a = depthImg>0
-    a = a*0.5
-    a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.5
+    a = a*0.4
+    a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
     cv2.imshow("", a)
     cv2.waitKey(1)
     
     return error
+
+def joint_function(dis, ske1, ske0, v2, T_T, T1_T, Vtx, depthImg, intrinsic):
+
+    ske1 = ske1+dis[1]
+    v1 = ske1-ske0
+    R = General.GetRotatefrom2Vector(v2, v1)
+    R_T = np.identity(4)
+    R_T[0:3,0:3] = R
+    boneTrans = np.dot(T1_T, np.dot(R_T, LA.inv(T_T)))
+
+    # transform
+    stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+    pt = np.stack( (Vtx[:,0],Vtx[:,1],Vtx[:,2],stack_pt),axis =1 )
+    pt = np.dot(pt, boneTrans.T)
+    pt /= pt[:,3].reshape((pt.shape[0], 1))
+    Vtx = pt[:,0:3]
+    Vtxold = Vtx
+    
+    # project to 2D
+    pix = np.array([0., 0., 1.])
+    pix = np.stack((pix for i in range(len(Vtx)) ))
+    Vtx[:,2] = General.in_mat_zero2one(Vtx[:,2])
+    pix[:,0] = Vtx[:,0]/Vtx[:,2]
+    pix[:,1] = Vtx[:,1]/Vtx[:,2]
+    pix = np.dot( pix, intrinsic.T)
+    pix = pix.astype(int)
+
+    # get error
+    bmap = (pix[:,0]>=0)*(pix[:,0]<depthImg.shape[1])*(pix[:,1]>=0)*(pix[:,1]<depthImg.shape[0])
+    error = Vtxold[:,2]-depthImg[pix[:,1]*bmap, pix[:,0]*bmap]
+    #bmap *= (depthImg[pix[:,1]*bmap, pix[:,0]*bmap]>0)
+    error = np.abs(error)
+    error = sum((error>0.03)*bmap)+sum(bmap==0)
+    
+    a = depthImg>0
+    a = a*0.4
+    a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
+    cv2.imshow("", a)
+    cv2.waitKey(1)
+    
+    return error
+
+def ICP_R_ls(R_1D, src, dis):
+    R = R_1D.reshape((3,3))
+    src = np.dot(R, src.T).T
+    return LA.norm(dis-src)

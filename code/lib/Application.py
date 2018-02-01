@@ -417,9 +417,31 @@ class Application(tk.Frame):
             self.RGBD[bp].Vmap_optimize()   
             self.RGBD[bp].NMap_optimize()
 
+        # show segmentation result
+        img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+        img_label_temp = self.DrawColors2D(self.RGBD[0],img_label_temp)
+        img_label = img_label_temp.copy()
+        img_label[:,:,0] = img_label_temp[:,:,2].copy()
+        img_label[:,:,1] = img_label_temp[:,:,1].copy()
+        img_label[:,:,2] = img_label_temp[:,:,0].copy()
+        img_label[self.pos2d[0,self.Index][:,1].astype(np.int16), self.pos2d[0,self.Index][:,0].astype(np.int16), 1:3] = 110
+        #cv2.imshow("depthimage", (self.RGBD[0].CroppedBox.astype(np.double))/7)
+        #cv2.imshow("depthImage_threshold", (self.RGBD[0].BdyThresh()>0)*1.0)
+        #print(str(self.Index) + " frame")
+        #cv2.imshow("label", img_label)
+        #cv2.waitKey()
+        if(self.Index<10):
+                imgstr = '00'+str(self.Index)
+        elif(self.Index<100):
+            imgstr = '0'+str(self.Index)
+        else:
+            imgstr = str(self.Index)
+        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/segment/' + matfilename + '/seg_'+ imgstr +'.png', img_label)
+
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
         self.RGBD[0].BuildBB()
+        self.RGBD[0].getWarpingPlanes()
 
         '''
         The first image is process differently from the other since it does not have any previous value.
@@ -441,6 +463,7 @@ class Application(tk.Frame):
         nbBdyPart = self.RGBD[0].bdyPart.shape[0]+1
         #Initialize stitcher object. It stitches the body parts
         StitchBdy = Stitcher.Stitch(nbBdyPart)
+        boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(self.RGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0], self.RGBD[0])
         # Initialize Body parts
         Parts = []
         Parts.append(BdyPrt.BodyParts(self.GPUManager,self.RGBD[0],self.RGBD[0], Tg[0]))
@@ -448,9 +471,11 @@ class Application(tk.Frame):
         BPVtx.append(np.array((0,0,0)))
         # Creating mesh of each body part
         for bp in range(bpstart,nbBdyPart):
+            boneMDQ, boneJDQ = StitchBdy.getJointInfo(bp, boneTrans, boneSubTrans)
+
             Parts.append(BdyPrt.BodyParts(self.GPUManager, self.RGBD[0], self.RGBD[bp], Tg[bp]))
             # Compute the 3D Model (TSDF + MC)
-            Parts[bp].Model3D_init(bp)
+            Parts[bp].Model3D_init(bp, boneJDQ)
 
             # Update number of vertices and faces in the stitched mesh
             nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
@@ -461,16 +486,16 @@ class Application(tk.Frame):
                 for j in range(4):
                     PoseBP[bp][i][j] = Tg[bp][i][j]
             # Concatenate all the body parts for stitching purpose
-            BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp]))
+            BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0, PoseBP[bp], bp))
             if bp == bpstart  :
-                StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp])
+                StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp,1, self.RGBD[0])
                 StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices,PoseBP[bp])
                 StitchBdy.StitchedFaces = Parts[bp].MC.Faces
             else:
-                StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp])
+                StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, self.RGBD[0])
             # save vertex in global of each body part
-            Parts[1].MC.SaveToPlyExt("GBody"+str(self.Index)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp]),Parts[bp].MC.Faces)
-
+            Parts[1].MC.SaveToPlyExt("GBody"+str(self.Index)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp,1,self.RGBD[0]),Parts[bp].MC.Faces)
+        BPVtxC = BPVtx
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody"+str(self.Index)+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
         Parts[1].MC.SaveToPlyExt("skeleton"+str(self.Index)+".ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
@@ -529,7 +554,6 @@ class Application(tk.Frame):
             rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,0] = 500
             rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,1] = 500
             rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,2] = 500
-            '''
             # get one corner normal
             corner_nal = np.zeros((2,3))
             corner_nal[1][1] -= 0.15
@@ -550,6 +574,7 @@ class Application(tk.Frame):
             cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
             cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
             cornernal[cornerpt2[1], cornerpt2[0], 2] = 100
+            '''
             # Get corners of OBB
             pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],Id4)
             pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
@@ -687,12 +712,53 @@ class Application(tk.Frame):
                 # Vertex and Normal map
                 newRGBD[bp].Vmap_optimize()   
                 newRGBD[bp].NMap_optimize()        
+            
+            # show segmentation result
+            img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            img_label_temp = self.DrawColors2D(newRGBD[0],img_label_temp)
+            img_label = img_label_temp.copy()
+            img_label[:,:,0] = img_label_temp[:,:,2]
+            img_label[:,:,1] = img_label_temp[:,:,1]
+            img_label[:,:,2] = img_label_temp[:,:,0]
+            img_label[self.pos2d[0,imgk][:,1].astype(np.int16), self.pos2d[0,imgk][:,0].astype(np.int16), 1:3] = 110
+            #print(str(imgk)+" frame")
+            #cv2.imshow("depthimage", (newRGBD[0].CroppedBox.astype(np.double))/7)
+            #cv2.imshow("depthImage_threshold", (newRGBD[0].BdyThresh()>0)*1.0)
+            #cv2.imshow("label", img_label)
+            #cv2.waitKey(1)
+            if(imgk<10):
+                imgstr = '00'+str(imgk)
+            elif(imgk<100):
+                imgstr = '0'+str(imgk)
+            else:
+                imgstr = str(imgk)
+            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/segment/' + matfilename + '/seg_' + imgstr + '.png', img_label)
+
+            #'''
+            # creating mesh of whole body
+            tempVtx = np.zeros((sum(sum(newRGBD[0].Vtx[:,:,2]>0)), 3))
+            tempt = 0
+            for i in range(newRGBD[0].Vtx.shape[0]):
+                for j in range(newRGBD[0].Vtx.shape[1]):
+                    if newRGBD[0].Vtx[i,j,2]>0:
+                        tempVtx[tempt,:] = newRGBD[0].Vtx[i,j,:]
+                        tempt+=1
+            rendering_originmesh = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
+            rendering_originmesh = self.RGBD[0].DrawMesh(rendering_originmesh,tempVtx,tempVtx,Id4, 1, 1)
+            Parts[bp].MC.SaveToPlyExt("wholeBody"+str(imgk)+"_ori.ply",tempt,0,StitchBdy.TransformVtx(tempVtx,self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4,Id4, 0, Id4, bp),[],0)
+            #'''
+
             # create the transform matrix from local to global coordinate
             newRGBD[0].myPCA()
+            newRGBD[0].BuildBB()
+            #newRGBD[0].GetBonesTrans(self.RGBD[0].coordsGbl)
 
             # Transform the bounding-boxes into current image
-            newRGBD[0].skeVtx[0] = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], newRGBD[0])
-            newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(preRGBD[0].skeVtx[0], preRGBD[0].coordsGbl, preRGBD[0].BBTrans)
+            #newRGBD[0].skeVtx[0] = Tracker.RegisterSkeleton( self.RGBD[0].skeVtx[0], newRGBD[0].skeVtx[0], BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
+            boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0], newRGBD[0])
+            newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(self.RGBD[0].skeVtx[0], self.RGBD[0].coordsGbl, self.RGBD[0].BBTrans)
+            boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtxC, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
+            boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
             #newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(self.RGBD[0].coordsGbl, newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans, StitchBdy)
 
             #GT
@@ -712,7 +778,8 @@ class Application(tk.Frame):
                 newRGBD[bp].Vmap_optimize()   
                 newRGBD[bp].NMap_optimize()
             '''
-            #if imgk<24:
+
+            #if imgk<22:
             #    continue
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
@@ -722,7 +789,6 @@ class Application(tk.Frame):
             
             # projection in 2d space to draw the 3D model(meshes)
             rendering = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
-            rendering_originmesh = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             rendering_oneVtx = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             cornernal =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -739,51 +805,41 @@ class Application(tk.Frame):
                 #update transform matrix with camera pose & local pose
                 Tg_new = np.dot(T_Pose[bp],Tg[bp])
                 
+                # get bp's joint information
+                boneMDQ, boneJDQ = StitchBdy.getJointInfo(bp, boneTrans, boneSubTrans)
+                
                 # Put the Global transfo in PoseBP so that the dtype entered in the GPU is correct
                 for i in range(4):
                     for j in range(4):
                         PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
 
                 # TSDF Fusion of the body part
-                #Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], newRGBD[0].coordsGbl[bp])
+                Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], boneMDQ[0], boneJDQ[0])
 
                 # Create Mesh
-                #Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
+                Parts[bp].MC = My_MC.My_MarchingCube(Parts[bp].TSDFManager.Size, Parts[bp].TSDFManager.res, 0.0, self.GPUManager)
                 # Mesh rendering
-                #Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
+                Parts[bp].MC.runGPU(Parts[bp].TSDFManager.TSDFGPU)      
     
                 # Update number of vertices and faces in the stitched mesh
                 nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
                 nb_facesGlo = nb_facesGlo +Parts[bp].MC.nb_faces[0]
                 
                 # Stitch all the body parts
-                BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], PoseBP[bp]))
+                BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0, PoseBP[bp], bp))
                 if bp ==1 :
-                    StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], PoseBP[bp])
+                    StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0])
                     StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, Tg[bp])
                     StitchBdy.StitchedFaces = Parts[bp].MC.Faces
                 else:
-                    StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], PoseBP[bp])
+                    StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, self.RGBD[0])
 
                 # output mesh in global of each body part
-                Parts[bp].MC.SaveToPlyExt("GBody"+str(imgk)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], PoseBP[bp]),Parts[bp].MC.Faces,0)
+                Parts[bp].MC.SaveToPlyExt("GBody"+str(imgk)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0]),Parts[bp].MC.Faces,0)
                 Parts[bp].MC.SaveToPly("body" + str(imgk)+"_" +str(bp) + ".ply")
 
             # projection in 2d space to draw the 3D model(meshes)
             rendering = self.RGBD[0].DrawMesh(rendering,StitchBdy.StitchedVertices,StitchBdy.StitchedNormales,Id4, 1, self.color_tag)
-
-            #'''
-            # creating mesh of whole body
-            tempVtx = np.zeros((sum(sum(newRGBD[0].Vtx[:,:,2]>0)), 3))
-            tempt = 0
-            for i in range(newRGBD[0].Vtx.shape[0]):
-                for j in range(newRGBD[0].Vtx.shape[1]):
-                    if newRGBD[0].Vtx[i,j,2]>0:
-                        tempVtx[tempt,:] = newRGBD[0].Vtx[i,j,:]
-                        tempt+=1
-            rendering_originmesh = self.RGBD[0].DrawMesh(rendering_originmesh,tempVtx,tempVtx,Id4, 1, 1)
-            Parts[bp].MC.SaveToPlyExt("wholeBody"+str(imgk)+"_ori.ply",tempt,0,StitchBdy.TransformVtx(tempVtx,self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4),[],0)
-            #'''
 
             formerIdx = imgk
             time_lapsed = time.time() - start
@@ -795,7 +851,7 @@ class Application(tk.Frame):
             Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
             # save the coordinate of the body part
             for bp in range(bpstart, nbBdyPart):
-                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp],Id4), bp)
+                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0,Id4, bp), bp)
 
 
             # projection in 2d space to draw the 3D model(meshes)
@@ -844,12 +900,11 @@ class Application(tk.Frame):
                 rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,0] = 500
                 rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,1] = 500
                 rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,2] = 500
-                '''
-                # get one corner normal
+                # get one bone normal
                 corner_nal = np.zeros((2,3))
                 corner_nal[1][1] -= 0.15
-                corner_nal[1] = np.dot(corner_nal[1], newRGBD[0].BBTrans[4][2,0:3,0:3].T)
-                corner_nal[0] += newRGBD[0].coordsGbl[4][2,:]
+                corner_nal[1] = np.dot(corner_nal[1], boneTrans[4,0:3,0:3].T)
+                corner_nal[0] += newRGBD[0].skeVtx[0][8,:]
                 corner_nal[1] += corner_nal[0]
                 cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
                 cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
@@ -864,6 +919,25 @@ class Application(tk.Frame):
                 cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
                 cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
                 cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
+                corner_nal = np.zeros((2,3))#
+                corner_nal[1][1] -= 0.15
+                corner_nal[1] = np.dot(corner_nal[1], boneTrans[3,0:3,0:3].T)
+                corner_nal[0] += newRGBD[0].skeVtx[0][9,:]
+                corner_nal[1] += corner_nal[0]
+                cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
+                cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
+                rr,cc,val = line_aa(cornerpt1[1],cornerpt1[0],cornerpt2[1],cornerpt2[0])
+                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
+                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
+                cornernal[rr,cc, 0] = 250
+                cornernal[rr,cc, 1] = 100
+                cornernal[rr,cc, 2] = 250
+                cornernal[cornerpt1[1], cornerpt1[0], 0] = 100
+                cornernal[cornerpt1[1], cornerpt1[0], 1] = 250
+                cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
+                cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
+                cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
+                '''
                 # Get corners of OBB
                 pt = self.RGBD[0].GetProjPts2D_optimize(newRGBD[0].coordsGbl[i], Id4)
                 pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
