@@ -535,46 +535,7 @@ class Application(tk.Frame):
                 img_skeleton[self.pos2d[0,self.Index][:,1].astype(np.int16)+i-1, self.pos2d[0,self.Index][:,0].astype(np.int16)+j-1,0:3] = 1000
         # draw Boundingboxes
         for i in range(1,len(self.RGBD[0].coordsGbl)):
-            '''
-            # get one vtx
-            Vtxone = np.zeros((1,3),np.float32)
-            Vtxone[0,:] = Parts[i].MC.Vertices[1224,:]
-            pt1 = self.RGBD[0].GetProjPts2D_optimize(StitchBdy.TransformVtx(Vtxone, self.RGBD[0].coordsGbl[i], self.RGBD[0].coordsGbl[i],PoseBP[i]), Id4)[0].astype(int)
-            rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,0] = 500
-            rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,1] = 100
-            rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,2] = 500
-            Vtxone[0,:] = Parts[i].MC.Vertices[123,:]
-            pt1 = self.RGBD[0].GetProjPts2D_optimize(StitchBdy.TransformVtx(Vtxone, self.RGBD[0].coordsGbl[i], self.RGBD[0].coordsGbl[i],PoseBP[i]), Id4)[0].astype(int)
-            rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,0] = 500
-            rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,1] = 500
-            rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,2] = 50
-            # get the coordinate center
-            Vtxone[0,:] = self.RGBD[0].coordsL[i][1,:]/2+self.RGBD[0].coordsL[i][2,:]/2
-            pt1 = self.RGBD[0].GetProjPts2D_optimize(StitchBdy.TransformVtx(Vtxone, self.RGBD[0].coordsGbl[i], self.RGBD[0].coordsGbl[i],PoseBP[i]), Id4)[0].astype(int)
-            rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,0] = 500
-            rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,1] = 500
-            rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,2] = 500
-            # get one corner normal
-            corner_nal = np.zeros((2,3))
-            corner_nal[1][1] -= 0.15
-            corner_nal[1] = np.dot(corner_nal[1], self.RGBD[0].BBTrans[4][2,0:3,0:3].T)
-            corner_nal[0] = self.RGBD[0].coordsGbl[4][2,:]
-            corner_nal[1] += corner_nal[0]
-            cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
-            cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
-            rr,cc,val = line_aa(cornerpt1[1],cornerpt1[0],cornerpt2[1],cornerpt2[0])
-            rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
-            cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-            cornernal[rr,cc, 0] = 250
-            cornernal[rr,cc, 1] = 100
-            cornernal[rr,cc, 2] = 250
-            cornernal[cornerpt1[1], cornerpt1[0], 0] = 100
-            cornernal[cornerpt1[1], cornerpt1[0], 1] = 250
-            cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
-            cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
-            cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
-            cornernal[cornerpt2[1], cornerpt2[0], 2] = 100
-            '''
+            
             # Get corners of OBB
             pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],Id4)
             pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
@@ -751,7 +712,6 @@ class Application(tk.Frame):
             # create the transform matrix from local to global coordinate
             newRGBD[0].myPCA()
             newRGBD[0].BuildBB()
-            #newRGBD[0].GetBonesTrans(self.RGBD[0].coordsGbl)
 
             # Transform the bounding-boxes into current image
             #newRGBD[0].skeVtx[0] = Tracker.RegisterSkeleton( self.RGBD[0].skeVtx[0], newRGBD[0].skeVtx[0], BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
@@ -881,63 +841,7 @@ class Application(tk.Frame):
             # draw Boundingboxes
             rendering_oneVtx = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             for i in range(1,len(self.RGBD[0].coordsGbl)):
-                '''
-                # get one vtx
-                Vtxone = np.zeros((1,3),np.float32)
-                Vtxone[0,:] = Parts[i].MC.Vertices[1224,:]
-                pt1 = self.RGBD[0].GetProjPts2D_optimize(StitchBdy.TransformVtx(Vtxone, self.RGBD[0].coordsGbl[i], newRGBD[0].coordsGbl[i], PoseBP[i]), Id4)[0].astype(int)
-                rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,0] = 500
-                rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,1] = 100
-                rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,2] = 500
-                Vtxone[0,:] = Parts[i].MC.Vertices[123,:]
-                pt1 = self.RGBD[0].GetProjPts2D_optimize(StitchBdy.TransformVtx(Vtxone, self.RGBD[0].coordsGbl[i], newRGBD[0].coordsGbl[i], PoseBP[i]), Id4)[0].astype(int)
-                rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,0] = 500
-                rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,1] = 500
-                rendering_oneVtx[pt1[1]-1:pt1[1]+1, pt1[0]-1:pt1[0]+1,2] = 50
-                # get the coordinate center
-                Vtxone[0,:] = self.RGBD[0].coordsL[i][1,:]/2+self.RGBD[0].coordsL[i][2,:]/2
-                pt1 = self.RGBD[0].GetProjPts2D_optimize(StitchBdy.TransformVtx(Vtxone, self.RGBD[0].coordsGbl[i], newRGBD[0].coordsGbl[i], PoseBP[i]), Id4)[0].astype(int)
-                rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,0] = 500
-                rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,1] = 500
-                rendering_oneVtx[pt1[1]-2:pt1[1]+2, pt1[0]-2:pt1[0]+2,2] = 500
-                # get one bone normal
-                corner_nal = np.zeros((2,3))
-                corner_nal[1][1] -= 0.15
-                corner_nal[1] = np.dot(corner_nal[1], boneTrans[4,0:3,0:3].T)
-                corner_nal[0] += newRGBD[0].skeVtx[0][8,:]
-                corner_nal[1] += corner_nal[0]
-                cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
-                cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
-                rr,cc,val = line_aa(cornerpt1[1],cornerpt1[0],cornerpt2[1],cornerpt2[0])
-                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
-                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                cornernal[rr,cc, 0] = 250
-                cornernal[rr,cc, 1] = 100
-                cornernal[rr,cc, 2] = 250
-                cornernal[cornerpt1[1], cornerpt1[0], 0] = 100
-                cornernal[cornerpt1[1], cornerpt1[0], 1] = 250
-                cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
-                cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
-                cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
-                corner_nal = np.zeros((2,3))#
-                corner_nal[1][1] -= 0.15
-                corner_nal[1] = np.dot(corner_nal[1], boneTrans[3,0:3,0:3].T)
-                corner_nal[0] += newRGBD[0].skeVtx[0][9,:]
-                corner_nal[1] += corner_nal[0]
-                cornerpt1 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[0]], Id4)[0]
-                cornerpt2 = self.RGBD[0].GetProjPts2D_optimize([corner_nal[1]], Id4)[0]
-                rr,cc,val = line_aa(cornerpt1[1],cornerpt1[0],cornerpt2[1],cornerpt2[0])
-                rr = np.maximum(0,np.minimum(rr, self.Size[0]-1))
-                cc = np.maximum(0,np.minimum(cc, self.Size[1]-1))
-                cornernal[rr,cc, 0] = 250
-                cornernal[rr,cc, 1] = 100
-                cornernal[rr,cc, 2] = 250
-                cornernal[cornerpt1[1], cornerpt1[0], 0] = 100
-                cornernal[cornerpt1[1], cornerpt1[0], 1] = 250
-                cornernal[cornerpt1[1], cornerpt1[0], 2] = 250
-                cornernal[cornerpt2[1], cornerpt2[0], 0] = 250
-                cornernal[cornerpt2[1], cornerpt2[0], 1] = 150
-                '''
+                
                 # Get corners of OBB
                 pt = self.RGBD[0].GetProjPts2D_optimize(newRGBD[0].coordsGbl[i], Id4)
                 pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
