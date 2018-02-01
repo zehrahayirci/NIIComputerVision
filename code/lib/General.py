@@ -174,8 +174,24 @@ def getBodypartPoseIndex(bp):
         pos = [19]
     return pos
 
+def GetRotatefrom2Vector(a, b):
+    '''
+    calculate the Rotation matrix form vector a to vector b
+    :param a: start vector
+    :param b: end vector
+    :return: Rotation Matrix
+    '''
+    a = a/LA.norm(a)
+    b = b/LA.norm(b)
+    v = np.cross(a,b)
+    c = np.dot(a,b)
+    Av = np.array([[0., -v[2], v[1]],[v[2], 0., -v[0]],[-v[1], v[0], 0.]]) 
+    R = np.identity(3)
+    R += Av + 1/(1+c)*np.dot(Av,Av)
+    return R
+
 def getQuaternionfromMatrix(mat):
-    quat = [0,0,0,0]
+    quat = np.zeros(4, dtype=np.float32)
     tr = mat[0,0]+mat[1,1]+mat[2,2]
     if tr>0:
         S = pow(tr+1, 0.5)*2
@@ -202,3 +218,72 @@ def getQuaternionfromMatrix(mat):
         quat[2] = (mat[1,2]+mat[2,1])/S
         quat[3] = 0.25*S
     return quat
+
+def getQuaternionConj(quat):
+    quat[1:4] *= -1
+    return quat
+
+def getQuaternionMul(quat1, quat2):
+    quat = np.zeros(4, dtype = np.float32)
+    quat[0] = quat1[0]*quat2[0] - np.dot(quat1[1:4], quat2[1:4])
+    quat[1:4] = quat1[0]*quat2[1:4]+quat2[0]*quat1[1:4]+np.cross(quat1[1:4], quat2[1:4])
+    return quat
+
+def getQuaternionNormalize(quat):
+    if np.dot(quat,quat)!= 0:
+        return quat/pow(np.dot(quat,quat),1/2)
+    return 0
+
+def getDualQuaternionfromMatrix(mat):
+    quatReal = getQuaternionfromMatrix(mat)
+    quatReal = getQuaternionNormalize(quatReal)
+    quatDual = np.zeros(4, dtype=np.float32)
+    quatDual[1:4] = mat[0:3,3]
+    quatDual = 0.5*getQuaternionMul(quatDual, quatReal)
+    dquat = np.zeros((2,4), dtype=np.float32)
+    dquat[0,:] = quatReal
+    dquat[1,:] = quatDual
+    return dquat
+
+def getDualQuaternionConj(dquat):
+    dquat[0,:] = getQuaternionConj(dquat[0,:])
+    dquat[1,:] = getQuaternionConj(dquat[1,:])
+    return dquat
+
+def getDualQuaternionMul(dquat1, dquat2):
+    dquat = np.zeros((2,4), dtype=np.float32)
+    dquat[0,:] = getQuaternionMul(dquat1[0,:], dquat2[0,:])
+    dquat[1,:] = getQuaternionMul(dquat1[0,:], dquat2[1,:])
+    dquat[1,:] += getQuaternionMul(dquat1[1,:], dquat2[0,:])
+    return dquat
+
+def getDualQuaternionNormalize(dquat):
+    mag = dquat[0][0]*dquat[0][0]+dquat[0][1]*dquat[0][1]
+    mag += dquat[0][2]*dquat[0][2]+dquat[0][3]*dquat[0][3]
+    mag = pow(float(mag), 0.5)
+    if mag!=0:
+        return dquat/mag
+    return 0
+
+def getMatrixfromDualQuaternion(dquat):
+    dquat = getDualQuaternionNormalize(dquat)
+    mat = np.identity(4, dtype=np.float32)
+
+    mat[0,0] = dquat[0,0]*dquat[0,0]+dquat[0,1]*dquat[0,1]-dquat[0,2]*dquat[0,2]-dquat[0,3]*dquat[0,3]
+    mat[0,1] = 2*dquat[0,1]*dquat[0,2] + 2*dquat[0,0]*dquat[0,3]
+    mat[0,2] = 2*dquat[0,1]*dquat[0,3] - 2*dquat[0,0]*dquat[0,2]
+
+    mat[1,0] = 2*dquat[0,1]*dquat[0,2] - 2*dquat[0,0]*dquat[0,3]
+    mat[1,1] = dquat[0,0]*dquat[0,0] + dquat[0,2]*dquat[0,2] - dquat[0,1]*dquat[0,1] - dquat[0,3]*dquat[0,3]
+    mat[1,2] = 2*dquat[0,2]*dquat[0,3] + 2*dquat[0,0]*dquat[0,1]
+
+    mat[2,0] = 2*dquat[0,1]*dquat[0,3] + 2*dquat[0,0]*dquat[0,2]
+    mat[2,1] = 2*dquat[0,2]*dquat[0,3] - 2*dquat[0,0]*dquat[0,1]
+    mat[2,2] = dquat[0,0]*dquat[0,0] + dquat[0,3]*dquat[0,3] - dquat[0,1]*dquat[0,1] - dquat[0,2]*dquat[0,2]
+
+    quat = getQuaternionMul(dquat[1,:]*2,getQuaternionConj(dquat[0,:]))
+    mat[3,0] = quat[1]
+    mat[3,1] = quat[2]
+    mat[3,2] = quat[3]
+
+    return mat.T

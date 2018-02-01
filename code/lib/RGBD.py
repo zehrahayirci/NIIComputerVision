@@ -201,6 +201,7 @@ class RGBD():
                 pt[1] = self.Vtx[i*s,j*s][1]
                 pt[2] = self.Vtx[i*s,j*s][2]
                 pt = np.dot(Pose, pt)
+                pt = pt/pt[:,3].reshape((pt.shape[0], 1))
                 nmle[0] = self.Nmls[i*s,j*s][0]
                 nmle[1] = self.Nmls[i*s,j*s][1]
                 nmle[2] = self.Nmls[i*s,j*s][2]
@@ -236,6 +237,7 @@ class RGBD():
         pix = np.dstack((pix,stack_pix))
         pt = np.dstack((self.Vtx[ ::s, ::s, :],stack_pt))
         pt = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         nmle = np.zeros((self.Size[0], self.Size[1],self.Size[2]), dtype = np.float32)
         nmle[ ::s, ::s,:] = np.dot(Pose[0:3,0:3],self.Nmls[ ::s, ::s,:].transpose(0,2,1)).transpose(1,2,0)
         #if (pt[2] != 0.0):
@@ -281,7 +283,7 @@ class RGBD():
         pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(pt,Pose.T)
-
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Pose[0:3,0:3].T)
         
@@ -323,7 +325,9 @@ class RGBD():
         """
         stack_pt = np.ones((np.size(self.Vtx,0), np.size(self.Vtx,1)), dtype = np.float32)
         pt = np.dstack((self.Vtx, stack_pt))
-        self.Vtx = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)[:, :, 0:3]
+        pt = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
+        self.Vtx = pt[:,:,0:3]
         self.Nmls = np.dot(Pose[0:3,0:3],self.Nmls.transpose(0,2,1)).transpose(1,2,0)
 
     def project3D22D(self, vtx, Tr= np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)):
@@ -816,8 +820,9 @@ class RGBD():
                 j=6
             elif i==19:
                 j=14
-            
+
             depth = abs(np.amax(self.coordsGbl[j][:,2])-np.amin(self.coordsGbl[j][0,2]))/2
+            depth = 0
             if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:                
                 skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
             else:
@@ -831,16 +836,23 @@ class RGBD():
                 elif self.labels[int(pos2D[i][1]), int(pos2D[i][0])-1]!=0:
                     skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])-1]+depth
                 else:
-                    "QAQQQQ"
+                    print "QAQQQQ"
                     exit()
-
+    
         #  project to 3D
         pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
         pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
         x = skedepth * pos2D[:,0]
         y = skedepth * pos2D[:,1]
         z = skedepth
-        return np.dstack((x,y,z))    
+        
+        # give hand and foot't joint correct
+        for i in [7,11,15,19]:
+            x[i] = (x[i-1]-x[i-2])/4+x[i-1]
+            y[i] = (y[i-1]-y[i-2])/4+y[i-1]
+            z[i] = (z[i-1]-z[i-2])/4+z[i-1]
+
+        return np.dstack((x,y,z)).astype(np.float32)  
     
            
     def myPCA(self, dims_rescaled_data=3):
@@ -1078,8 +1090,301 @@ class RGBD():
             minZ = np.min(self.coordsL[bp][:,2])
             maxZ = np.max(self.coordsL[bp][:,2])
             self.BBsize.append([LA.norm(maxX - minX), LA.norm(maxY - minY), LA.norm(maxZ - minZ)])
+    
+    def GetBonesTrans(self, preCoordsGbl):
+        """
+        Get the transform matrix from preCoordinate to this coordinate in global
+        retrun self.BBTrans
+        """
+        dirs = [[], \
+        [3,2,1,0, 7,6,5,4], [1,0,3,2, 5,4,7,6], [3,2,1,0, 7,6,5,4], [3,2,1,0, 7,6,5,4], \
+        [3,2,1,0, 7,6,5,4], [3,2,1,0, 7,6,5,4], [1,0,3,2, 5,4,7,6], [3,2,1,0, 7,6,5,4], \
+        [1,0,3,2, 5,4,7,6], [1,2,3,4,5,6,7,8,0, 10,11,12,13,14,15,16,17,9], \
+        [3,2,1,0, 7,6,5,4], [3,2,1,0, 7,6,5,4], [3,2,1,0, 7,6,5,4], [3,2,1,0, 7,6,5,4]]
+        dirs_Y = [[], \
+        [1,0,3,2, 5,4,7,6], [3,2,1,0, 7,6,5,4], [1,0,3,2, 5,4,7,6], [1,0,3,2, 5,4,7,6], \
+        [1,0,3,2, 5,4,7,6], [1,0,3,2, 5,4,7,6], [3,2,1,0, 7,6,5,4], [1,0,3,2, 5,4,7,6], \
+        [3,2,1,0, 7,6,5,4], [8,0,1,2,3,4,5,6,7, 17,9,10,11,12,13,14,15,16], \
+        [1,0,3,2, 5,4,7,6], [1,0,3,2, 5,4,7,6], [1,0,3,2, 5,4,7,6], [1,0,3,2, 5,4,7,6]]
+        zdir = np.array((0.,0.,1.))
+        for bp in range(1,15):
+            for c in range(self.coordsGbl[bp].shape[0]):
+                c1 = np.zeros((3,3))
+                c1[0,:] = preCoordsGbl[bp][dirs[bp][c]]-preCoordsGbl[bp][c]
+                c1[0,:] /= LA.norm(c1[0,:])
+                c1[2,:] = zdir - np.dot(zdir, c1[0,:])*c1[0,:]
+                c1[2,:] /= LA.norm(c1[2,:])
+                c1[1,:] = np.cross(c1[0,:], c1[2,:])
+                c2 = np.zeros((3,3))
+                c2[0,:] = self.coordsGbl[bp][dirs[bp][c]]-self.coordsGbl[bp][c]
+                c2[0,:] /= LA.norm(c2[0,:])
+                c2[2,:] = zdir - np.dot(zdir, c2[0,:])*c2[0,:]
+                c2[2,:] /= LA.norm(c2[2,:])
+                c2[1,:] = np.cross(c2[0,:], c2[2,:])
+                
+                R = np.identity(4)
+                R[0,0] = np.dot(c2[0,:], c1[0,:])
+                R[0,1] = np.dot(c2[0,:], c1[1,:])
+                R[0,2] = np.dot(c2[0,:], c1[2,:])
+                R[1,0] = np.dot(c2[1,:], c1[0,:])
+                R[1,1] = np.dot(c2[1,:], c1[1,:])
+                R[1,2] = np.dot(c2[1,:], c1[2,:])
+                R[2,0] = np.dot(c2[2,:], c1[0,:])
+                R[2,1] = np.dot(c2[2,:], c1[1,:])
+                R[2,2] = np.dot(c2[2,:], c1[2,:])
+                T1 = np.identity(4)
+                T1[0:3,3] = preCoordsGbl[bp][c]
+                T2 = np.identity(4)
+                T2[0:3,3] = self.coordsGbl[bp][c]
 
+                self.BBTrans[bp][c,:,:] = np.dot(T2,np.dot(R, LA.inv(T1)))
 
+                #test
+                '''
+                pt = np.ones(4)
+                pt[0:3] = preCoordsGbl[bp][dirs[bp][c]]
+                print str(bp) + "  " + str(c)
+                print preCoordsGbl[bp][dirs[bp][c]]
+                temp = np.dot(self.BBTrans[bp][c,:,:], pt.T)[0:3]
+                print temp
+                print self.coordsGbl[bp][dirs[bp][c]]
+                '''
+
+            self.BBTrans[12][0,:,:] = self.BBTrans[1][3,:,:]
+            self.BBTrans[12][4,:,:] = self.BBTrans[1][7,:,:]
+            self.BBTrans[12][1,:,:] = self.BBTrans[1][2,:,:]
+            self.BBTrans[12][3,:,:] = self.BBTrans[1][6,:,:]
+            if self.coordsGbl[2][0,0]<self.coordsGbl[2][3,0]:
+                self.BBTrans[1][0,:,:] = self.BBTrans[2][0,:,:]
+                self.BBTrans[1][4,:,:] = self.BBTrans[2][4,:,:]
+                self.BBTrans[1][1,:,:] = self.BBTrans[2][3,:,:]
+                self.BBTrans[1][5,:,:] = self.BBTrans[2][7,:,:]
+            else:
+                self.BBTrans[1][0,:,:] = self.BBTrans[2][3,:,:]
+                self.BBTrans[1][4,:,:] = self.BBTrans[2][7,:,:]
+                self.BBTrans[1][1,:,:] = self.BBTrans[2][0,:,:]
+                self.BBTrans[1][5,:,:] = self.BBTrans[2][4,:,:]
+            self.BBTrans[11][0,:,:] = self.BBTrans[3][3,:,:]
+            self.BBTrans[11][4,:,:] = self.BBTrans[3][7,:,:]
+            self.BBTrans[11][1,:,:] = self.BBTrans[3][2,:,:]
+            self.BBTrans[11][5,:,:] = self.BBTrans[3][6,:,:]
+            if self.coordsGbl[4][0,0]<self.coordsGbl[4][3,0]:
+                self.BBTrans[3][0,:,:] = self.BBTrans[4][1,:,:]
+                self.BBTrans[3][4,:,:] = self.BBTrans[4][5,:,:]
+                self.BBTrans[3][1,:,:] = self.BBTrans[4][0,:,:]
+                self.BBTrans[3][5,:,:] = self.BBTrans[4][4,:,:]
+            else:
+                self.BBTrans[3][0,:,:] = self.BBTrans[4][0,:,:]
+                self.BBTrans[3][4,:,:] = self.BBTrans[4][4,:,:]
+                self.BBTrans[3][1,:,:] = self.BBTrans[4][1,:,:]
+                self.BBTrans[3][5,:,:] = self.BBTrans[4][5,:,:]
+            self.BBTrans[6][2,:,:] = self.BBTrans[5][3,:,:]
+            self.BBTrans[6][6,:,:] = self.BBTrans[5][7,:,:]
+            self.BBTrans[6][3,:,:] = self.BBTrans[5][2,:,:]
+            self.BBTrans[6][7,:,:] = self.BBTrans[5][6,:,:]
+            self.BBTrans[14][0,:,:] = self.BBTrans[6][1,:,:]
+            self.BBTrans[14][4,:,:] = self.BBTrans[6][5,:,:]
+            self.BBTrans[14][1,:,:] = self.BBTrans[6][0,:,:]
+            self.BBTrans[14][5,:,:] = self.BBTrans[6][4,:,:]
+            
+            self.BBTrans[8][2,:,:] = self.BBTrans[7][2,:,:]
+            self.BBTrans[8][6,:,:] = self.BBTrans[7][6,:,:]
+            self.BBTrans[8][3,:,:] = self.BBTrans[7][1,:,:]
+            self.BBTrans[8][7,:,:] = self.BBTrans[7][5,:,:]
+            
+            self.BBTrans[13][0,:,:] = self.BBTrans[8][2,:,:]
+            self.BBTrans[13][4,:,:] = self.BBTrans[8][6,:,:]
+            self.BBTrans[13][1,:,:] = self.BBTrans[8][3,:,:]
+            self.BBTrans[13][5,:,:] = self.BBTrans[8][7,:,:]
+            
+            self.BBTrans[2][2,:,:] = self.BBTrans[10][0,:,:]
+            self.BBTrans[2][6,:,:] = self.BBTrans[10][9,:,:]
+            self.BBTrans[2][1,:,:] = self.BBTrans[10][1,:,:]
+            self.BBTrans[2][5,:,:] = self.BBTrans[10][10,:,:]
+            self.BBTrans[9][0,:,:] = self.BBTrans[10][2,:,:]
+            self.BBTrans[9][4,:,:] = self.BBTrans[10][11,:,:]
+            self.BBTrans[9][3,:,:] = self.BBTrans[10][3,:,:]
+            self.BBTrans[9][7,:,:] = self.BBTrans[10][12,:,:]
+            self.BBTrans[4][3,:,:] = self.BBTrans[10][4,:,:]
+            self.BBTrans[4][7,:,:] = self.BBTrans[10][13,:,:]
+            self.BBTrans[4][2,:,:] = self.BBTrans[10][5,:,:]
+            self.BBTrans[4][6,:,:] = self.BBTrans[10][14,:,:]
+            self.BBTrans[5][1,:,:] = self.BBTrans[10][6,:,:]
+            self.BBTrans[5][5,:,:] = self.BBTrans[10][15,:,:]
+            self.BBTrans[5][0,:,:] = self.BBTrans[10][7,:,:]
+            self.BBTrans[5][4,:,:] = self.BBTrans[10][16,:,:]
+            self.BBTrans[7][0,:,:] = self.BBTrans[10][7,:,:]
+            self.BBTrans[7][4,:,:] = self.BBTrans[10][16,:,:]
+            self.BBTrans[7][3,:,:] = self.BBTrans[10][8,:,:]
+            self.BBTrans[7][7,:,:] = self.BBTrans[10][17,:,:]
+
+    def getWarpingPlanes(self):
+        """
+        Get the area function which is used to compute weight when warping, in all body part
+        :param self.skeVtx self.coordsGbl
+        :retrun self.planesF
+        """
+        self.planesF = np.zeros((15,4), dtype=np.float32)
+        for bp in range(1,15):
+            if bp==1:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2 
+                boneV_p = self.skeVtx[0][5]-self.skeVtx[0][4]
+                boneV = self.skeVtx[0][6]-self.skeVtx[0][5]
+                point = self.skeVtx[0][5]
+            elif bp==2:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 2
+                planeIdx[0,1] = 1
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][20]-self.skeVtx[0][1]
+                boneV_p[0], boneV_p[1] = boneV_p[1], boneV_p[0]
+                boneV_p[2] = 0
+                boneV = self.skeVtx[0][5]-self.skeVtx[0][4]
+                point = self.skeVtx[0][4]
+            elif bp==3:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 1
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][9]-self.skeVtx[0][8]
+                boneV = self.skeVtx[0][10]-self.skeVtx[0][9]
+                point = self.skeVtx[0][9]
+            elif bp==4:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 3
+                planeIdx[0,1] = 2
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][20]-self.skeVtx[0][1]
+                boneV_p[0], boneV_p[1] = -boneV_p[1], -boneV_p[0]
+                boneV_p[2] = 0
+                boneV = self.skeVtx[0][9]-self.skeVtx[0][8]
+                point = self.skeVtx[0][8]
+            elif bp==5:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][0]-self.skeVtx[0][1]
+                boneV = self.skeVtx[0][17]-self.skeVtx[0][16]
+                point = self.skeVtx[0][16]
+            elif bp==6:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 3
+                planeIdx[0,1] = 2
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][17]-self.skeVtx[0][16]
+                boneV = self.skeVtx[0][18]-self.skeVtx[0][17]
+                point = self.skeVtx[0][17]
+            elif bp==7:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 3
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][0]-self.skeVtx[0][1]
+                boneV = self.skeVtx[0][13]-self.skeVtx[0][12]
+                point = self.skeVtx[0][12]
+            elif bp==8:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 3
+                planeIdx[0,1] = 2
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][13]-self.skeVtx[0][12]
+                boneV = self.skeVtx[0][14]-self.skeVtx[0][13]
+                point = self.skeVtx[0][13]
+            elif bp==9:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 3
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 1
+                boneV_p = self.skeVtx[0][20]-self.skeVtx[0][1]
+                boneV = self.skeVtx[0][3]-self.skeVtx[0][2]
+                point = self.skeVtx[0][2]
+            elif bp==10:
+                planeIdx = np.zeros((2,3), dtype = np.float32)
+                planeIdx[0,0] = self.skeVtx[0][0,0]
+                planeIdx[0,1] = self.skeVtx[0][0,1]
+                planeIdx[0,2] = self.skeVtx[0][0,2]
+                planeIdx[1,0] = self.skeVtx[0][1,0]
+                planeIdx[1,1] = self.skeVtx[0][1,1]
+                planeIdx[1,2] = self.skeVtx[0][1,2]
+            elif bp==11:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 1
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][9]-self.skeVtx[0][10]
+                boneV = self.skeVtx[0][10]-self.skeVtx[0][11]
+                point = self.skeVtx[0][10]
+            elif bp==12:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][5]-self.skeVtx[0][6]
+                boneV = self.skeVtx[0][6]-self.skeVtx[0][7]
+                point = self.skeVtx[0][6]
+            elif bp==13:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][13]-self.skeVtx[0][14]
+                boneV = self.skeVtx[0][14]-self.skeVtx[0][15]
+                point = self.skeVtx[0][14]
+            elif bp==14:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][17]-self.skeVtx[0][18]
+                boneV = self.skeVtx[0][18]-self.skeVtx[0][19]
+                point = self.skeVtx[0][18]
+            if bp!=10:
+                v1 = self.coordsGbl[bp][int(planeIdx[0,1])] - self.coordsGbl[bp][int(planeIdx[0,0])]
+                v2 = self.coordsGbl[bp][int(planeIdx[0,2])] - self.coordsGbl[bp][int(planeIdx[0,0])]
+                self.planesF[bp,0:3] = np.cross(v1, v2)
+                self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
+                self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
+
+                #plane3
+                
+                #R = General.GetRotatefrom2Vector(boneV_p, boneV)
+                #self.planesF[bp,0:3] = np.dot((R)[0:3,0:3], self.planesF[bp,0:3].T)
+                if bp!=5 and bp!=7:
+                    self.planesF[bp,0:3] = boneV[0:3]
+                    #R = General.GetRotatefrom2Vector(boneV_p, boneV)
+                    #self.planesF[bp,0:3] = np.dot((R)[0:3,0:3], self.planesF[bp,0:3].T)
+                    #self.planesF[bp,2] = 0
+                    self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
+                    self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], point)
+                else:
+                    self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
+                
+
+                if np.dot(self.planesF[bp,0:3], self.coordsGbl[bp][int(planeIdx[0,4])])+self.planesF[bp,3] <0:
+                    self.planesF[bp] = -self.planesF[bp]
+                
+            else:
+                self.planesF[bp,0:3] = planeIdx[0,:]-planeIdx[1,:]
+                self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
+                self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], planeIdx[1,:])
+        
     def GetProjPts2D(self, vects3D, Pose, s=1) :
         """
         Project a list of vertexes in the image RGBD
@@ -1097,6 +1402,7 @@ class RGBD():
             pt[2] = vects3D[i][2]
             # transform list
             pt = np.dot(Pose, pt)
+            pt /= pt[:,3].reshape((pt.shape[0], 1))
             #Project it in the 2D space
             if (pt[2] != 0.0):
                 pix[0] = pt[0]/pt[2]
@@ -1126,6 +1432,7 @@ class RGBD():
         pt[:,0:3] = vects3D
         # transform list
         pt = np.dot(pt,Pose.T)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         # Project it in the 2D space
         pt[:,2] = General.in_mat_zero2one(pt[:,2])
         pix[:,0] = pt[:,0]/pt[:,2]
@@ -1147,6 +1454,7 @@ class RGBD():
 
         for i in range(1,len(self.vects3D)):
             vect = np.dot(self.vects3D[i],Pose[0:3,0:3].T )
+            vect /= vect[:,3].reshape((vect.shape[0], 1))
             newPt = np.zeros(vect.shape)
             for j in range(vect.shape[0]):
                 newPt[j][0] = ctr2D[i][0]-nbPix*vect[j][0]

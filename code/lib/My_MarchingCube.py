@@ -264,6 +264,7 @@ class My_MarchingCube():
                 pt[1] = self.Vertices[self.Faces[i,k],1]
                 pt[2] = self.Vertices[self.Faces[i,k],2]
                 pt = np.dot(Pose, pt)
+                pt /= pt[3]
                 pix[0] = pt[0]/pt[2]
                 pix[1] = pt[1]/pt[2]
                 pix = np.dot(intrinsic, pix)
@@ -290,6 +291,7 @@ class My_MarchingCube():
         pt = np.ones(((np.size(self.Vertices, 0)-1)/s+1, np.size(self.Vertices, 1)+1))
         pt[:,:-1] = self.Vertices[::s, :]
         pt = np.dot(Pose,pt.transpose()).transpose()
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         #nmle = np.zeros((self.Size[0], self.Size[1],self.Size[2]), dtype = np.float32)
         #nmle[ ::s, ::s,:] = np.dot(Pose[0:3,0:3],self.Nmls[ ::s, ::s,:].transpose(0,2,1)).transpose(1,2,0)
         
@@ -317,7 +319,8 @@ class My_MarchingCube():
         '''
         stack_pt = np.ones(np.size(self.Vertices,0), dtype = np.float32)
         pt = np.stack((self.Vertices[:,0],self.Vertices[:,1],self.Vertices[:,2], stack_pt),axis =1)
-        self.Vertices = np.dot(Pose,pt.T).T[:, 0:3]
+        pt = np.dot(Pose,pt.T).T
+        self.Vertices = pt/pt[:,3].reshape((pt.shape[0], 1))
         self.Normales = np.dot(Pose[0:3,0:3],self.Normales.T).T                      
                     
 
@@ -479,6 +482,7 @@ class My_MarchingCube():
         pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(Pose,pt.T).T
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         # Transform normales in the camera pose
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Pose[0:3,0:3],Nmls[ ::s,:].T).T
