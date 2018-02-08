@@ -837,7 +837,7 @@ class Tracker():
             weightspara = 0.02
             weight = np.exp(-weight*weight/2/weightspara/weightspara)
             wmap = wmap*(weight<0.1)
-            #Vtx = np.delete(Vtx, np.where(wmap==0), axis=0)
+            Vtx = np.delete(Vtx, np.where(wmap==0), axis=0)
             
             '''
             displace = np.zeros((3))
@@ -858,7 +858,7 @@ class Tracker():
             pt /= pt[:,3].reshape((pt.shape[0], 1))
             Vtx = pt[:,0:3]
 
-            
+            '''
             # testing
             Vtx = pt[:,0:3]
             pix = np.array([0., 0., 1.])
@@ -874,7 +874,7 @@ class Tracker():
             a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
             cv2.imshow("initial", a)
             cv2.waitKey(1)
-            
+            '''
             
             for iter in range(20):
                 Vtx_src_cent = np.mean(pt[:,0:3], axis = 0)
@@ -909,7 +909,7 @@ class Tracker():
                 boneTrans = np.dot(newTr, boneTrans)
                 pt = np.dot(pt_temp, boneTrans.T)
                 
-                
+                '''
                 # testing
                 Vtx = pt[:,0:3]
                 pix = np.array([0., 0., 1.])
@@ -940,7 +940,7 @@ class Tracker():
                 a[pix[:,1].astype(int)*bmap, pix[:,0].astype(int)*bmap] +=0.6
                 cv2.imshow("nn", a)
                 cv2.waitKey(1)
-                
+                '''
                 
             boneTransList[bIdx,:,:] = boneTrans[:,:]
                 

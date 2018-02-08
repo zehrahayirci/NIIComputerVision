@@ -837,7 +837,7 @@ class RGBD():
                     skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])-1]+depth
                 else:
                     print "QAQQQQ"
-                    exit()
+                    #exit()
     
         #  project to 3D
         pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
@@ -1237,7 +1237,7 @@ class RGBD():
                 self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
 
                 #plane3
-                
+                ###
                 #R = General.GetRotatefrom2Vector(boneV_p, boneV)
                 #self.planesF[bp,0:3] = np.dot((R)[0:3,0:3], self.planesF[bp,0:3].T)
                 if bp!=5 and bp!=7:

@@ -187,6 +187,9 @@ def GetRotatefrom2Vector(a, b):
     c = np.dot(a,b)
     Av = np.array([[0., -v[2], v[1]],[v[2], 0., -v[0]],[-v[1], v[0], 0.]]) 
     R = np.identity(3)
+    if c == -1:
+        print "meet a=-b"
+        return np.identity(3)
     R += Av + 1/(1+c)*np.dot(Av,Av)
     return R
 
@@ -266,6 +269,7 @@ def getDualQuaternionNormalize(dquat):
     return 0
 
 def getMatrixfromDualQuaternion(dquat):
+    dquat = dquat.reshape((2,4))
     dquat = getDualQuaternionNormalize(dquat)
     mat = np.identity(4, dtype=np.float32)
 

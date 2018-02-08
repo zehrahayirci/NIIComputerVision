@@ -180,7 +180,7 @@ class Stitch():
 
         # tranform the vertices in the global coordinates system
         PartVertices = self.TransformVtx(PartVtx, coordC, coordNew, BBTrNew,  boneDQ, jointDQ, planeF, Tg, bp, 1, RGBD)
-        PartNormales = self.TransformNmls(PartNmls,PartVtx, Tg, 1)
+        PartNormales = self.TransformNmls(PartNmls,PartVtx, coordC, coordNew, BBTrNew,  boneDQ, jointDQ, planeF, Tg, bp, 1, RGBD)
         PartFacets = PartFaces + np.max(ConcatFaces)+1
 
         # concatenation
@@ -261,7 +261,7 @@ class Stitch():
 
         return newVtx
         
-    def TransformNmls(self, Nmls, Vtx, Tg, s=1):
+    def TransformNmls(self, Nmls,  Vtx, coordC, coordNew, BBTrNew, boneDQ, jointDQ, planeF, Tg, bp,  s=1 , RGBD = 0):
         """
         Transform the normales in a system to another system.
         Here it will be mostly used to transform from local system to global coordiantes system
@@ -273,6 +273,38 @@ class Stitch():
         """
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Tg[0:3,0:3].T)
+        
+        
+        stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+        pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
+        pt = np.dot(pt, Tg.T)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
+        Vtx = pt[:,0:3]
+        newVtx = np.zeros((Vtx.shape[0],3), dtype=np.float32)
+        VtxNum = Vtx.shape[0]
+
+        ##joint with plane weight
+        if boneDQ.shape[0]==4:
+            nmle = np.dot(nmle, boneDQ.T)
+        else:
+            weights = np.zeros(VtxNum)
+            wmap = np.zeros((VtxNum))
+            DQnp = np.zeros((VtxNum, 2, 4))
+            weightspara = 0.02
+            #weight
+            weights = np.dot(Vtx,planeF[0:3].T)+planeF[3]
+            wmap[:] = weights[:]
+            weights = np.exp(-weights*weights/2/weightspara/weightspara)
+            weights = weights*(wmap>0)+(wmap<=0)
+            #warping
+            DQnp += (1-weights).reshape((VtxNum,1,1))*boneDQ[0].reshape((1,2,4))
+            DQnp += (weights).reshape((VtxNum,1,1))*jointDQ[0].reshape((1,2,4))
+            
+            for v in range(VtxNum):
+                TrDQ = General.getDualQuaternionNormalize(DQnp[v,:,:])
+                Tr = General.getMatrixfromDualQuaternion(TrDQ)
+                nmle[v] = np.dot(nmle[v], Tr[0:3,0:3].T)
+
         return nmle
 
     def RArmsTransform(self, angle,bp, pos2d,RGBD,Tg):

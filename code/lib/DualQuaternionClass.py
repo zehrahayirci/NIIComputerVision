@@ -328,6 +328,7 @@ class DualQuaternion(object):
     def normalize(dq1):
          magInverse = (1.0 / Quaternion.dot( dq1.mReal, dq1.mReal )) if Quaternion.dot( dq1.mReal, dq1.mReal ) > 0 else 0.0
          newDQ = DualQuaternion()
+         magInverse = pow(magInverse, 0.5)
          newDQ.mReal = dq1.mReal * magInverse
          newDQ.mDual = dq1.mDual * magInverse
          return newDQ
