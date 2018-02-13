@@ -14,6 +14,7 @@ import scipy.ndimage.measurements as spm
 import pdb
 from skimage import img_as_ubyte
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import copy
 from skimage.draw import line_aa
 
@@ -40,7 +41,7 @@ class RGBD():
         self.intrinsic = intrinsic
         self.fact = fact
         
-    def LoadMat(self, Images,Pos_2D,BodyConnection):
+    def LoadMat(self, Images,Pos_2D,BodyConnection, ColorImg):
         """
         Load information in datasets into the RGBD object
         :param Images: List of depth images put in function of time
@@ -49,6 +50,10 @@ class RGBD():
         :return:  none
         """
         self.lImages = Images
+        self.CImages = ColorImg
+        self.hasColor = True
+        if self.CImages.shape[0]==0:
+            self.hasColor = False
         self.numbImages = len(self.lImages.transpose()) # useless
         self.Index = -1
         self.pos2d = Pos_2D
@@ -85,6 +90,7 @@ class RGBD():
         size_depth = depth_in.shape
         self.Size = (size_depth[0], size_depth[1], 3)
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
+        self.depth_image_ori = depth_in
         self.depth_image = depth_in.astype(np.float32) / self.fact
         # self.skel = self.depth_image.copy() # useless
 
@@ -93,6 +99,10 @@ class RGBD():
         self.pos2d[0,idx][:,1] = (np.maximum(0, self.pos2d[0, idx][:,1]))
         self.pos2d[0,idx][:,0] = (np.minimum(self.Size[1], self.pos2d[0, idx][:,0]))
         self.pos2d[0,idx][:,1] = (np.minimum(self.Size[0], self.pos2d[0, idx][:,1]))
+
+        # get kmeans of image
+        if self.hasColor:
+            self.color_image = self.CImages[0][self.Index]
 
     #####################################################################
     ################### Map Conversion Functions #######################
@@ -402,6 +412,7 @@ class RGBD():
         # distance head to neck. Let us assume this is enough for all borders
         distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)+15
         Box = self.depth_image
+        Box_ori = self.depth_image_ori
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
@@ -414,6 +425,9 @@ class RGBD():
 
         self.transCrop = np.array([colStart,lineStart,colEnd,lineEnd])
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
+        self.CroppedBox_ori = Box_ori[lineStart:lineEnd,colStart:colEnd]
+        if self.hasColor:
+            self.CroppedBox_color = self.color_image[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
 
     def BdyThresh(self):
@@ -475,6 +489,33 @@ class RGBD():
         handLeft = ( self.segm.GetHand( MidBdyImage,left))
         footRight = ( self.segm.GetFoot( MidBdyImage,right))
         footLeft = ( self.segm.GetFoot( MidBdyImage,left))
+        
+        # handle the ground near the foot
+        if self.hasColor:    
+            a = (footRight*1.0).reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1],1)) *self.CroppedBox_color
+            #cv2.imshow("a", a) 
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],3))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footRight = (labeled==labeled[self.CroppedPos[19][1]-1, self.CroppedPos[19][0]-1+5])
+            #cv2.imshow("", labeled*1.0/3)
+            #cv2.waitKey()
+            a = (footLeft*1.0).reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1],1)) *self.CroppedBox_color
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],3))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footLeft = (labeled==labeled[self.CroppedPos[15][1]-1, self.CroppedPos[15][0]-1+5])
+        else:
+            a = (footRight*1.0) *self.CroppedBox_ori
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],1))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footRight = (labeled==labeled[self.CroppedPos[19][1]-1, self.CroppedPos[19][0]-1])
+            a = (footLeft*1.0) *self.CroppedBox_ori
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],1))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footLeft = (labeled==labeled[self.CroppedPos[15][1]-1, self.CroppedPos[15][0]-1])
 
         # display the trunck
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))

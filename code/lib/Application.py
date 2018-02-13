@@ -372,17 +372,23 @@ class Application(tk.Frame):
     
         print self.intrinsic
 
-        fact = 650
+        fact = 690
 
         TimeStart = time.time()
 
         #load data
         path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
-        matfilename = '041_1027_01'
+        matfilename ='041_1027_01'
         mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
         #mat = scipy.io.loadmat(path + '/String4b.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
+
+        if 'Color2DepthImg' in mat:
+            ColorImg = mat['Color2DepthImg']
+        else:
+            ColorImg = np.zeros((0))
+        ColorImg = np.zeros((0))
 
         self.connectionMat = scipy.io.loadmat(path + '/SkeletonConnectionMap.mat')
         self.connection = self.connectionMat['SkeletonConnectionMap']
@@ -393,7 +399,7 @@ class Application(tk.Frame):
         
         # number of images in the sequence. Start and End
         self.Index = 4
-        nunImg = 27
+        nunImg = 26
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -403,7 +409,7 @@ class Application(tk.Frame):
             # add an RGBD Object in the list
             self.RGBD.append(RGBD.RGBD(path + '/Depth.tiff', path + '/RGB.tiff', self.intrinsic, fact))
             # load data in the RGBD Object
-            self.RGBD[bp].LoadMat(lImages,self.pos2d,self.connection)
+            self.RGBD[bp].LoadMat(lImages,self.pos2d,self.connection, ColorImg)
             self.RGBD[bp].ReadFromMat(self.Index)
             # process depth image
             self.RGBD[bp].BilateralFilter(-1, 0.02, 3)
@@ -471,6 +477,8 @@ class Application(tk.Frame):
         Parts.append(BdyPrt.BodyParts(self.GPUManager,self.RGBD[0],self.RGBD[0], Tg[0]))
         BPVtx = []
         BPVtx.append(np.array((0,0,0)))
+        BPNml = []
+        BPNml.append(np.array((0,0,0)))
         # Creating mesh of each body part
         for bp in range(bpstart,nbBdyPart):
             boneMDQ, boneJDQ = StitchBdy.getJointInfo(bp, boneTrans, boneSubTrans)
@@ -489,6 +497,7 @@ class Application(tk.Frame):
                     PoseBP[bp][i][j] = Tg[bp][i][j]
             # Concatenate all the body parts for stitching purpose
             BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0, PoseBP[bp], bp))
+            BPNml.append(StitchBdy.TransformNmls(Parts[bp].MC.Normales, Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0, PoseBP[bp], bp))
             if bp == bpstart  :
                 StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp,1, self.RGBD[0])
                 StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp,1, self.RGBD[0])
@@ -502,9 +511,9 @@ class Application(tk.Frame):
         Parts[1].MC.SaveToPlyExt("wholeBody"+str(self.Index)+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
         #Parts[1].MC.SaveToPlyExt("skeleton"+str(self.Index)+".ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
         # save the coordinate of the body part
-        #for bp in range(bpstart, nbBdyPart):
-            #Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsGbl[bp], bp)
-            #Parts[1].MC.SaveBBToPlyExt("BBL_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsL[bp], bp)
+        for bp in range(bpstart, nbBdyPart):
+            Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsGbl[bp], bp)
+            Parts[1].MC.SaveBBToPlyExt("BBL_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsL[bp], bp)
 
         # projection in 2d space to draw the 3D model(meshes)
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -662,7 +671,7 @@ class Application(tk.Frame):
             # separate  each body parts of the image into different object -> each object have just the body parts in its depth image
             for bp in range(nbBdyPart):
                 newRGBD.append(RGBD.RGBD(path + '/Depth.tiff', path + '/RGB.tiff', self.intrinsic, fact))
-                newRGBD[bp].LoadMat(lImages,self.pos2d,self.connection)              
+                newRGBD[bp].LoadMat(lImages,self.pos2d,self.connection, ColorImg)              
                 # Get new current image
                 newRGBD[bp].ReadFromMat(imgk) 
                 newRGBD[bp].BilateralFilter(-1, 0.02, 3)
@@ -719,17 +728,16 @@ class Application(tk.Frame):
             #newRGBD[0].skeVtx[0] = Tracker.RegisterSkeleton( self.RGBD[0].skeVtx[0], newRGBD[0].skeVtx[0], BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
             #boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0], newRGBD[0])
             boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], newRGBD[0])
-            newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(self.RGBD[0].skeVtx[0], self.RGBD[0].coordsGbl, self.RGBD[0].BBTrans)
             for binx in range(20):
                 boneTr_all[binx] = np.dot(boneTrans[binx], boneTr_all[binx])
                 boneTrans[binx] = np.dot(np.identity(4), boneTr_all[binx]) 
                 boneSubTrans[binx] = np.dot(np.identity(4), boneSubTr_all[binx])
-            ###
             #boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtxC, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
             #boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
-            boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
+            boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtx, BPNml, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
+            newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(self.RGBD[0].skeVtx[0], self.RGBD[0].coordsGbl, self.RGBD[0].BBTrans)
             #newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(self.RGBD[0].coordsGbl, newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans, StitchBdy)
-
+            
             
 
             #GT
@@ -765,7 +773,9 @@ class Application(tk.Frame):
             cornernal =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
 
             BPVtx = []
-            BPVtx.append(np.array((0,0,0)))            
+            BPVtx.append(np.array((0,0,0)))     
+            BPNml = []
+            BPNml.append(np.array((0,0,0)))       
             # Updating mesh of each body part
             for bp in range(1,nbBdyPart):
                 print "bp: " + str(bp)
@@ -783,7 +793,7 @@ class Application(tk.Frame):
                 for i in range(4):
                     for j in range(4):
                         PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
-                ###
+
                 # TSDF Fusion of the body part
                 Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], boneMDQ[0], boneJDQ[0])
 
@@ -798,6 +808,7 @@ class Application(tk.Frame):
                 
                 # Stitch all the body parts
                 BPVtx.append(StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0, PoseBP[bp], bp))
+                BPNml.append(StitchBdy.TransformNmls(Parts[bp].MC.Normales, Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0, PoseBP[bp], bp))
                 if bp ==1 :
                     StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0])
                     StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0])
@@ -821,8 +832,8 @@ class Application(tk.Frame):
             Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
             #Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
             # save the coordinate of the body part
-            #for bp in range(bpstart, nbBdyPart):
-                #Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0,Id4, bp), bp)
+            for bp in range(bpstart, nbBdyPart):
+                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0,Id4, bp), bp)
 
 
             # projection in 2d space to draw the 3D model(meshes)
