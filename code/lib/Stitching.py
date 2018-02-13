@@ -285,7 +285,7 @@ class Stitch():
 
         ##joint with plane weight
         if boneDQ.shape[0]==4:
-            nmle = np.dot(nmle, boneDQ.T)
+            nmle = np.dot(nmle, boneDQ.T[0:3,0:3])
         else:
             weights = np.zeros(VtxNum)
             wmap = np.zeros((VtxNum))

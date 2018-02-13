@@ -811,7 +811,7 @@ class Tracker():
                 
         return skeNew
     
-    def RegisterBoneTr(self, boneTransList, VtxList, pointcloud, depthImg, intrinsic, planesF):
+    def RegisterBoneTr(self, boneTransList, VtxList, NmlList, pointcloud, depthImg, intrinsic, planesF):
         '''
         refine the boneTransform of each body part
         '''
@@ -821,16 +821,21 @@ class Tracker():
         [20,2],[2,3],[1,20],[0,1], \
         [6,7], [10,11],[14,15],[18,19]]
         boneParent = [1,14,14,4,14,14,7,15,8,10,15,11,14,14,15,15,0,3,6,9]
+        #boneChild = [16,0,1,17,3,4,18,6,7,19,9,10,13,13,12,14,16,17,18,19]
         boneorder = [15,14,13,1,0,4,3,7,10,6,9,16,17,18,19]
+        #boneorder = [19,18,17,16,9,6,10,7,3,4,0,1,13,14,15]
         bone2bp = [1,2,10,3,4,10,8,7,10,6,5,10,9,9,10,10,12,11,13,14]
         
         nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(pointcloud)
 
         for bIdx in boneorder:
             Vtx = VtxList[bone2bp[bIdx]]
+            Nml = NmlList[bone2bp[bIdx]]
             planeF = planesF[bone2bp[bIdx]]
             boneTrans = np.identity(4, dtype=np.float32)
             boneTrans[:] = boneTransList[bIdx,:,:]
+            boneTrans_ori = np.identity(4, dtype=np.float32)
+            boneTrans_ori[:] = boneTransList[bIdx,:,:]
 
             weight = np.dot(Vtx,planeF[0:3].T)+planeF[3]
             wmap = weight>0
@@ -838,18 +843,8 @@ class Tracker():
             weight = np.exp(-weight*weight/2/weightspara/weightspara)
             wmap = wmap*(weight<0.1)
             Vtx = np.delete(Vtx, np.where(wmap==0), axis=0)
+            Nml = np.delete(Nml, np.where(wmap==0), axis=0)
             
-            '''
-            displace = np.zeros((3))
-            error1= joint_function(displace, skeNew[bone[1]], skeNew[bone[0]],  v2, T_T, T1_T, Vtx, depthImg, intrinsic)
-            print error1
-            res = sp.optimize.minimize(joint_function, displace, method='Nelder-Mead', args=(skeNew[bone[1]], skeNew[bone[0]], v2, T_T, T1_T, Vtx, depthImg, intrinsic), options={'maxiter':80})
-            error2= joint_function(res.x, skeNew[bone[1]], skeNew[bone[0]], v2, T_T, T1_T, Vtx, depthImg, intrinsic)
-            print error2
-            if error2<error1:
-                skeNew[bone[1]] += res.x
-            '''
-
             ## icp
             stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
             pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
@@ -857,6 +852,7 @@ class Tracker():
             pt = np.dot(pt, boneTrans.T)
             pt /= pt[:,3].reshape((pt.shape[0], 1))
             Vtx = pt[:,0:3]
+            Nml = np.dot(Nml, boneTrans.T[0:3,0:3])
 
             '''
             # testing
@@ -876,7 +872,7 @@ class Tracker():
             cv2.waitKey(1)
             '''
             
-            for iter in range(20):
+            for iter in range(15):
                 Vtx_src_cent = np.mean(pt[:,0:3], axis = 0)
                 Vtx_src = pt[:,0:3] - Vtx_src_cent.reshape((1,3))
 
@@ -886,20 +882,21 @@ class Tracker():
                 Vtx_dis = Vtx_dis - Vtx_dis_cent.reshape((1,3))
 
                 # optimization
-                '''
-                R = np.identity(3)
-                res = sp.optimize.least_squares(ICP_R_ls, R.reshape((9)), args=(Vtx_src, Vtx_dis))
-                R = res.x.reshape((3,3))
-                '''
-
+                DQ = np.zeros((2,4))
+                DQ[0,0] = 1
+                res = sp.optimize.least_squares(ICP_R_ls, DQ.reshape((8)), args=(Vtx_src, Vtx_dis, boneTrans, boneTransList[boneParent[bIdx],:,:], boneTrans_ori, Nml))
+                DQ = res.x.reshape((2,4))
+                R = General.getMatrixfromDualQuaternion(DQ)[0:3,0:3]
+               
                 # SVD
+                '''
                 H = np.dot(Vtx_src.T, Vtx_dis)
                 U,S,V = LA.svd(H)
                 R = np.dot(V.T,U.T)
                 if LA.det(R)<0:
                     V[2,:] *= -1
                     R = np.dot(V.T,U.T)
-                
+                '''
 
                 # get translation
                 T = -np.dot(R,Vtx_src_cent.T)+Vtx_dis_cent.T
@@ -908,6 +905,7 @@ class Tracker():
                 newTr[0:3,3] = T
                 boneTrans = np.dot(newTr, boneTrans)
                 pt = np.dot(pt_temp, boneTrans.T)
+                Nml = np.dot(Nml, R.T)
                 
                 '''
                 # testing
@@ -941,7 +939,7 @@ class Tracker():
                 cv2.imshow("nn", a)
                 cv2.waitKey(1)
                 '''
-                
+            
             boneTransList[bIdx,:,:] = boneTrans[:,:]
                 
         return boneTransList
@@ -1511,7 +1509,10 @@ def joint_function(dis, ske1, ske0, v2, T_T, T1_T, Vtx, depthImg, intrinsic):
     
     return error
 
-def ICP_R_ls(R_1D, src, dis):
-    R = R_1D.reshape((3,3))
+def ICP_R_ls(DQ_1D, src, dis, Tr, Trp, Tr_ori, Nml):
+    R = General.getMatrixfromDualQuaternion(DQ_1D.reshape((2,4)))[0:3,0:3]
     src = np.dot(R, src.T).T
-    return LA.norm(dis-src)
+    Nml = np.dot(R, Nml.T).T
+
+    #return LA.norm((dis-src))*2 + LA.norm(np.dot(R, Tr[0:3, 0:3])-Trp[0:3, 0:3])
+    return LA.norm((dis-src)*Nml)*2 + LA.norm(np.dot(R, Tr[0:3, 0:3])-Trp[0:3, 0:3]) + LA.norm(np.dot(R, Tr[0:3, 0:3])-Tr_ori[0:3, 0:3])
