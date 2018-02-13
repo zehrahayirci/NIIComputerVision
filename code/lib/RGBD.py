@@ -628,111 +628,6 @@ class RGBD():
         self.AddOverlap()
         self.BodyLabelling()
 
-    def BodyReSegmentation(self):
-        """
-        Project coordinate into 2D to get the segment-points and calls Segmentation 
-        :return none
-        """
-        # get segment point
-        Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[1], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.foreArmPtsL[:,:] = coordsGbl2D[0:4,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[2], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.upperArmPtsL[:,:] = coordsGbl2D[0:4,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[3], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.foreArmPtsR[:,:] = coordsGbl2D[0:4,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[4], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.upperArmPtsR[0,:] = coordsGbl2D[0,:]
-        self.segm.upperArmPtsR[3,:] = coordsGbl2D[1,:]
-        self.segm.upperArmPtsR[2,:] = coordsGbl2D[2,:]
-        self.segm.upperArmPtsR[1,:] = coordsGbl2D[3,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[5], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.thighPtsR[:,:] = coordsGbl2D[0:4,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[6], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.calfPtsR[:,:] = coordsGbl2D[0:4,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[7], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.thighPtsL[0,:] = coordsGbl2D[0,:]
-        self.segm.thighPtsL[3,:] = coordsGbl2D[1,:]
-        self.segm.thighPtsL[2,:] = coordsGbl2D[2,:]
-        self.segm.thighPtsL[1,:] = coordsGbl2D[3,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[8], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.calfPtsL[:,:] = coordsGbl2D[0:4,:]
-        coordsGbl2D = self.GetProjPts2D_optimize(self.coordsGbl[9], Id4)
-        coordsGbl2D -= self.transCrop[0:2]
-        self.segm.peakshoulderL[:] = coordsGbl2D[0,:]
-        self.segm.peakshoulderR[:] = coordsGbl2D[3,:]
-
-        # binary image without bqckground
-        imageWBG = (self.BdyThresh()>0)
-        
-        # process of segmentation algorithm
-        right = 0
-        left = 1
-        # arm
-        armLeft = self.segm.rearmSeg(imageWBG,left)
-        armRight = self.segm.rearmSeg(imageWBG,right)
-        # leg
-        legRight = self.segm.relegSeg(imageWBG,right)
-        legLeft = self.segm.relegSeg(imageWBG,left)
-        
-        # Retrieve every already segmentated part to the main body.
-        tmp = armLeft[0]+armLeft[1]+armRight[0]+armRight[1]+legRight[0]+legRight[1]+legLeft[0]+legLeft[1]
-        MidBdyImage =(imageWBG-(tmp>0))
-        
-        # continue segmentation for hands and feet
-        head = self.segm.headSeg(MidBdyImage)
-        handRight = ( self.segm.GetHand( MidBdyImage,right,1))
-        handLeft = ( self.segm.GetHand( MidBdyImage,left,1))
-        footRight = ( self.segm.GetFoot( MidBdyImage,right,1))
-        footLeft = ( self.segm.GetFoot( MidBdyImage,left,1))
-
-        # display the trunck
-        # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
-        # cv2.waitKey(0)
-
-        # Retrieve again every newly computed segmentated part to the main body.
-        tmp2 = handRight+handLeft+footRight+footLeft+head
-        MidBdyImage2 =(MidBdyImage-(tmp2))
-
-        # Display result
-        # cv2.imshow('MidBdyImage2' , MidBdyImage2.astype(np.float))
-        # cv2.waitKey(0)
-        body = ( self.segm.GetBody( MidBdyImage2)>0)
-
-        # cv2.imshow('body' , body.astype(np.float))
-        # cv2.waitKey(0)
-        #pdb.set_trace()
-
-        # list of each body parts
-        self.bdyPart = np.array( [ armLeft[0], armLeft[1], armRight[0], armRight[1], \
-                                   legRight[0], legRight[1], legLeft[0], legLeft[1], \
-                                   head, body, handRight, handLeft, footLeft,footRight ]).astype(np.int)#]).astype(np.int)#]).astype(np.int)#
-        # list of color for each body parts
-        self.bdyColor = np.array( [np.array([0,0,255]), np.array([200,200,255]), np.array([0,255,0]), np.array([200,255,200]),\
-                                   np.array([255,0,255]), np.array([255,180,255]), np.array([255,255,0]), np.array([255,255,180]),\
-                                   np.array([255,0,0]), np.array([255,255,255]),np.array([0,100,0]),np.array([0,191,255]),\
-                                   np.array([255,165,0]),np.array([199,21,133]) ])    
-        self.labelColor = np.array( ["#0000ff", "#ffc8ff", "#00ff00","#c8ffc8","#ff00ff","#ffb4ff",\
-                                   "#ffff00","#ffffb4","#ff0000","#ffffff","#00bfff","#006400",\
-                                   "#c715ff","#ffa500"])    
-
-
-    def reSegmentation(self):
-        """
-        call methods to resegment
-        :return: none
-        """
-        self.BodyReSegmentation()
-        self.AddOverlap()
-        self.BodyLabelling()
 
 #######################################################################
 ################### Bounding boxes Function #######################
@@ -1278,14 +1173,8 @@ class RGBD():
                 self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
 
                 #plane3
-                ###
-                #R = General.GetRotatefrom2Vector(boneV_p, boneV)
-                #self.planesF[bp,0:3] = np.dot((R)[0:3,0:3], self.planesF[bp,0:3].T)
                 if bp!=5 and bp!=7:
                     self.planesF[bp,0:3] = boneV[0:3]
-                    #R = General.GetRotatefrom2Vector(boneV_p, boneV)
-                    #self.planesF[bp,0:3] = np.dot((R)[0:3,0:3], self.planesF[bp,0:3].T)
-                    #self.planesF[bp,2] = 0
                     self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
                     self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], point)
                 else:

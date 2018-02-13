@@ -40,6 +40,7 @@ class Stitch():
         get joints' position and transform related to the body part
         :param bp
         :param boneTrans: all bones' transform
+        :param boneSubTrans: all parent bone's transform
         :return: bone's DQ, joint's DQ
         """
         #plane3
@@ -231,22 +232,6 @@ class Stitch():
             #warping
             DQnp += (1-weights).reshape((VtxNum,1,1))*boneDQ[0].reshape((1,2,4))
             DQnp += (weights).reshape((VtxNum,1,1))*jointDQ[0].reshape((1,2,4))
-            #print weights
-            '''
-            Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-            p1 = RGBD.GetProjPts2D_optimize(Vtx, Id4)
-            a = np.zeros((RGBD.Size[0], RGBD.Size[1]))
-            a[p1[:,1], p1[:,0]] = 1-weights
-            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/031_1027_01/'+str(bp)+"_"+str(0)+".png", a*255)
-            cv2.imshow("0", a)
-            a[p1[:,1], p1[:,0]] = weights
-            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/031_1027_01/'+str(bp)+"_"+str(1)+".png", a*255)
-            cv2.imshow("1", a)
-            cv2.waitKey(1)
-            if bp==1:
-                self.a = np.zeros((RGBD.Size[0], RGBD.Size[1]))
-            self.a[p1[:,1], p1[:,0]] = weights[:]
-            '''
             
             for v in range(VtxNum):
                 TrDQ = General.getDualQuaternionNormalize(DQnp[v,:,:])
@@ -384,28 +369,6 @@ class Stitch():
         :param BBTrans: the transform matrix of  bounding-boxes in Canonical frame
         :return: the new bounding-boxes in global and the transform matrix of bounding-boxes
         """
-        '''
-        AllrelatedJun = [ [],\
-        [[5,4,6],[5,4,6],[6,5,7],[6,5,7]], [[5,4,6],[4,5,20,1],[4,5,20,1],[5,4,6]], \
-        [[9,8,10],[9,8,10],[10,11,9],[10,11,9]], [[9,8,10],[9,8,10],[9,8,20,1],[9,8,20,1]], \
-        [[16,0,17,1,12,13],[16,17,0,1],[17,16,18],[17,16,18]], [[18,17,19],[18,17,19],[17,16,18],[17,16,18]], \
-        [[12,0,13,1,16,17],[13,12,14],[13,12,14],[12,0,13,1]], [[14,13,15],[14,13,15],[13,12,14],[13,12,14]], \
-        [[2,20,4,1],[3,2],[3,2],[2,20,8,1]], \
-        [[4,5,20,1],[4,5,20,1],[2,20,4,1],[2,20,8,1],[8,9,20,1],[8,9,20,1],[16,17,0,1],[16,12,0,1,17,13],[12,0,13,1]], \
-        [[10,9,11],[10,9,11],[10,11],[10,11]], [[6,5,7],[6,5,7],[6,7],[6,7]], \
-        [[14,13,15],[14,13,15],[14,15],[14,15]], [[18,17,19],[18,17,19],[18,19],[18,19]]
-        ]
-        AllrelatedBone = [ [],\
-        [[0,1],[0,1],[0],[0]], [[1,0],[1,2],[1,2],[1,0]], \
-        [[3,4],[3,4],[3],[3]], [[4,3],[4,3],[4,5],[4,5]], \
-        [[8,11],[10,11],[10,9],[10,9]], [[9],[9],[9,10],[9,10]], \
-        [[8,11],[7,6],[7,6],[7,8]], [[6],[6],[6,7],[6,7]], \
-        [[12,2],[12,13],[12,13],[12,5]], \
-        [[1,2],[1,2],[12,2],[12,5],[4,5],[4,5],[10,11],[8,11],[7,8]], \
-        [[3],[3],[3],[3]], [[0],[0],[0],[0]], \
-        [[6],[6],[6],[6]], [[9],[9],[9],[9]]
-        ]
-        '''
         AllrelatedBone = [ [],\
         [[1],[1],[0],[0]], [[1],[14],[14],[1]], \
         [[4],[4],[3],[3]], [[4],[4],[14],[14]], \
@@ -430,8 +393,6 @@ class Stitch():
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
-                #newDQ = DualQuaternion.DualQuaternion()
-                #newDQ.mReal.w = 0
                 newDQ = np.zeros((2,4), dtype=np.float32)
                 scale = 0.0
                 for r in range(len(relatedBones)):
@@ -440,18 +401,14 @@ class Stitch():
                     newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
                     tempQR = General.getQuaternionfromMatrix(self.boneTrans[relatedBone])
                     tempT = self.boneTrans[relatedBone][0:3,3]
-                    #tempDQ = DualQuaternion.DualQuaternion([tempQR[0], tempQR[1], tempQR[2], tempQR[3]],[tempT[0],tempT[1],tempT[2]])
                     tempDQ = General.getDualQuaternionfromMatrix(self.boneTrans[relatedBone])
-                    #tempDQ = tempDQ.normalize
                     tempDQ = General.getDualQuaternionNormalize(tempDQ)
                     newDQ = newDQ+tempDQ*weights[r]
                     scale += self.boneTrans[relatedBone][3,3]*weights[r]
                 newBBTran[p] /= sum(weights)
                 newDQ *= 1/sum(weights)
                 scale *= 1/sum(weights)
-                #newDQ = newDQ.normalize
                 newDQ =  General.getDualQuaternionNormalize(newDQ)
-                #newBBTran[p,:,:] = newDQ.dualQuaternionToMatrix()
                 newBBTran[p,:,:] = General.getMatrixfromDualQuaternion(newDQ)
                 newBBTran[p,3,3] = scale
                 pt = np.dot(newBBTran[p,:,:], pt.T)
@@ -463,8 +420,6 @@ class Stitch():
                 pt = np.array([0.,0.,0.,1.])
                 pt[0:3] = BB[bp][p]
                 weights = []
-                #newDQ = DualQuaternion.DualQuaternion()
-                #newDQ.mReal.w = 0
                 newDQ = np.zeros((2,4), dtype=np.float32)
                 scale = 0.0
                 for r in range(len(relatedBones)):
@@ -473,18 +428,14 @@ class Stitch():
                     newBBTran[p] += weights[r]*self.boneTrans[relatedBone]
                     tempQR = General.getQuaternionfromMatrix(self.boneTrans[relatedBone])
                     tempT = self.boneTrans[relatedBone][0:3,3]
-                    #tempDQ = DualQuaternion.DualQuaternion([tempQR[0], tempQR[1], tempQR[2], tempQR[3]],[tempT[0],tempT[1],tempT[2]])
                     tempDQ = General.getDualQuaternionfromMatrix(self.boneTrans[relatedBone])
-                    #tempDQ = tempDQ.normalize
                     tempDQ = General.getDualQuaternionNormalize(tempDQ)
                     newDQ = newDQ+tempDQ*weights[r]
                     scale += self.boneTrans[relatedBone][3,3]*weights[r]
                 newBBTran[p] /= sum(weights)
                 newDQ *= 1/sum(weights)
                 scale *= 1/sum(weights)
-                #newDQ = newDQ.normalize
                 newDQ =  General.getDualQuaternionNormalize(newDQ)
-                #newBBTran[p,:,:] = newDQ.dualQuaternionToMatrix()
                 newBBTran[p,:,:] = General.getMatrixfromDualQuaternion(newDQ)
                 newBBTran[p,3,3] = scale
                 pt = np.dot(newBBTran[p,:,:], pt.T)
@@ -495,7 +446,7 @@ class Stitch():
             newBBTrans.append(newBBTran)
         return newBBs, newBBTrans
 
-    def GetVBonesTrans(self, skeVtx_cur, skeVtx_prev, newRGBD):
+    def GetVBonesTrans(self, skeVtx_cur, skeVtx_prev):
         """
         Get transform matrix of bone from previous to current frame
         :param skeVtx_cur: the skeleton Vtx in current frame
@@ -505,11 +456,9 @@ class Stitch():
         bonelist = [[5,6],[4,5],[20,4],[9,10],[8,9],[20,8], \
         [13,14],[12,13],[0,12],[17,18],[16,17],[0,16], \
         [20,2],[2,3],[1,20],[0,1], \
-        #[6,5], [10,9],[14,13],[18,17]]
         [6,7], [10,11],[14,15],[18,19]]
         boneorder = [15,14,12,2,5,13,1,0,4,3,8,11,7,10,6,9,16,17,18,19]
         jointParent = [4,20,1,8,20,1,12,0,0,16,0,0,1,20,0,0]
-        #boneParent = [1,2,14,4,5,14,7,8,8,10,11,11,14,12,15,15]
         boneParent = [1,14,14,4,14,14,7,15,8,10,15,11,14,14,15,15,0,3,6,9]
         bonePath = [[15,14,2,1,0], [15,14,2,1], [15,14,2], [15,14,5,4,3], [15,14,5,4], [15,14,5], \
         [8,7,6], [8,7], [8], [11,10, 9], [11,10], [11], \
@@ -527,9 +476,6 @@ class Stitch():
 
         # test
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-        a1 = newRGBD.depth_image.astype(np.double)/10
-        a2 = newRGBD.depth_image.astype(np.double)/10
-        a3 = newRGBD.depth_image.astype(np.double)/10
         tempSkeVtx = copy.deepcopy(skeVtx_prev)
 
         #initial
@@ -540,14 +486,12 @@ class Stitch():
         for i in range(20):
             self.boneTrans[i] = np.identity(4,dtype=np.float32)
             self.boneSubTrans[i] = np.identity(4,dtype=np.float32)
-        
-        # old version
+
         for bIdx in boneorder:
             bone = bonelist[bIdx]
             boneP = bonelist[boneParent[bIdx]]
             v1 = skeVtx_cur[bone[1]]-skeVtx_cur[bone[0]]
             v2 = skeVtx_prev[bone[1]]-skeVtx_prev[bone[0]]
-            #v2 = bonemodel[bIdx]
             v3 = skeVtx_prev[boneP[1]] - skeVtx_prev[boneP[0]]
             if bIdx==1:
                 v3[0], v3[1] = v3[1], v3[0]
@@ -566,161 +510,19 @@ class Stitch():
             R1_T = np.identity(4)
             R1_T[0:3,0:3] = R
             
-            '''
-            if bIdx == 3:
-                R_T[:] = Id4[:]
-                R_T[0,0] = math.cos(0.2*math.pi)
-                R_T[0,1] = -math.sin(0.2*math.pi)
-                R_T[1,0] = math.sin(0.2*math.pi)
-                R_T[1,1] = math.cos(0.2*math.pi)
-            else:
-               R_T[:] = Id4[:]
-            '''
-            
             S_T = np.identity(4)
             S_T[0:3, 0:3] *= LA.norm(v1)/LA.norm(v2)
-            #R_T = np.dot(S_T, R_T)
             self.boneTrans[bIdx] = R_T
             self.boneSubTrans[bIdx] = R1_T
-            #self.boneTrans[bIdx, 3,3] = LA.norm(v2)/LA.norm(v1)
             T_T = np.identity(4)
             T_T[0:3,3] = skeVtx_prev[bone[0]]
             T1_T = np.identity(4)
             T1_T[0:3,3] = skeVtx_cur[bone[0]]
             self.boneTrans[bIdx] = np.dot(T1_T, np.dot(self.boneTrans[bIdx,:,:],LA.inv(T_T)))
             self.boneSubTrans[bIdx] = np.dot(T_T, np.dot(self.boneSubTrans[bIdx,:,:],LA.inv(T_T)))
-            #self.boneSubTrans[bIdx] = np.dot(self.boneTrans[boneParent[bIdx]], self.boneSubTrans[bIdx])
             self.RTr[bIdx], self.STr[bIdx] = polar(self.boneTrans[bIdx])
-            #self.boneTrans[bIdx] = np.dot(self.RTr[bIdx], self.STr[bIdx] )
-            # test
-            pt = np.array([0.,0.,0.,1.])
-            pt[0:3] = skeVtx_prev[bone[0]]
-            pt = np.dot(self.boneTrans[bIdx,:,:], pt.T).T
-            pt /= pt[3] 
-            tempSkeVtx[bone[0]] = pt[0:3]
-            pt = np.array([0.,0.,0.,1.])
-            pt[0:3] = skeVtx_prev[bone[1]]
-            pt = np.dot(self.boneTrans[bIdx,:,:], pt.T).T
-            pt /= pt[3] 
-            tempSkeVtx[bone[1]] = pt[0:3]
-            #print 
-            '''
-            print bIdx
-            print skeVtx_cur[bone[0]]
-            print tempSkeVtx[bone[0]]
-            print skeVtx_cur[bone[1]]
-            print tempSkeVtx[bone[1]]
-            print LA.norm(tempSkeVtx[bone[1]]-tempSkeVtx[bone[0]])
-            print LA.norm(skeVtx_cur[bone[1]]-skeVtx_cur[bone[0]])
-            print (tempSkeVtx[bone[1]]-tempSkeVtx[bone[0]])/LA.norm(tempSkeVtx[bone[1]]-tempSkeVtx[bone[0]])
-            print (skeVtx_cur[bone[1]]-skeVtx_cur[bone[0]])/LA.norm(skeVtx_cur[bone[1]]-skeVtx_cur[bone[0]])
-
-            print bIdx
-            print skeVtx_cur[bone[0]]
-            print skeVtx_cur[bone[1]]
-            print skeVtx_prev[bone[0]]
-            print skeVtx_prev[bone[1]]
-            print v1 
-            print v2
-            '''
-            '''
-            #draw
-            #origin
-            p0 = newRGBD.GetProjPts2D_optimize([skeVtx_cur[bone[0]]], Id4).astype(np.int16)
-            p0 = p0[0]
-            p1 = newRGBD.GetProjPts2D_optimize([skeVtx_cur[bone[1]]], Id4).astype(np.int16)
-            p1 = p1[0]
-            rr,cc,val = line_aa(int(p0[1]), int(p0[0]), int(p1[1]), int(p1[0]))
-            a1[rr,cc] = 1.0
-            cv2.imshow("cur",a1)
-            #origin pre
-            p0 = newRGBD.GetProjPts2D_optimize([skeVtx_prev[bone[0]]], Id4).astype(np.int16)
-            p0 = p0[0]
-            p1 = newRGBD.GetProjPts2D_optimize([skeVtx_prev[bone[1]]], Id4).astype(np.int16)
-            p1 = p1[0]
-            rr,cc,val = line_aa(int(p0[1]), int(p0[0]), int(p1[1]), int(p1[0]))
-            a3[rr,cc] = 1.0
-            cv2.imshow("pre",a3)
-            #new
-            p0 = newRGBD.GetProjPts2D_optimize([tempSkeVtx[bone[0]]], Id4).astype(np.int16)
-            p0 = p0[0]
-            p1 = newRGBD.GetProjPts2D_optimize([tempSkeVtx[bone[1]]], Id4).astype(np.int16)
-            p1 = p1[0]
-            rr,cc,val = line_aa(int(p0[1]), int(p0[0]), int(p1[1]), int(p1[0]))
-            rr = np.maximum(0,np.minimum(rr, 424-1))
-            cc = np.maximum(0,np.minimum(cc, 512-1))
-            a2[rr,cc] = 1.0
-            cv2.imshow("prev->cur",a2)
-        cv2.waitKey(1)
-        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/031_1027_01/bone24_mine.png', a2*255)  
-        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/031_1027_01/bone24_ori.png', a1*255)  
-        '''
 
         return self.boneTrans, self.boneSubTrans
-
-    def GetSkeTransfo(self, pos2d,cur,prev,RGBD ,pRGBD, nRGBD, bp, pose):
-        """
-        Transform Pose matrix to move the model body parts according to the position of the skeleton
-        For now just a rotation in the z axis
-        :param bp : number of the body parts
-        :param pos2d : position in 2D of the junctions
-        :param cur : index for the current frame
-        :param prev : index for the previous frame
-        :param RGBD : an RGBD object containing the image
-        :param pRGBD : an RGBD object containing the vertex in pre frame
-        :param nRGBD : an RGBD object containing the vertex in now frame
-        :param pose : the camera transformation from prev to cur
-        :return The transform between two skeleton
-        """
-        PosCur = pos2d[0,cur]
-        PosPrev = pos2d[0,prev]
-
-        # print prev
-        # print cur
-        # get the junctions of the current body parts
-        pos = self.GetPos(bp)
-
-        Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-
-        # Compute the transform between the two skeleton : Tbb = A^-1 * B
-
-        # Compute A
-        A = self.GetCoordSyst(PosPrev,pos,RGBD, pRGBD, bp, pose)
-        # Compute B
-        B = self.GetCoordSyst(PosCur, pos, RGBD, nRGBD, bp, Id4)
-        # check if junction is on the noise
-        if B[3,3]==0:
-            print bp, " meet noise"
-
-            return pose
-
-        # Compute Tbb : skeleton tracking transfo
-        Tbb = np.dot(B,General.InvPose(A))#B#np.identity(4)#A#
-
-        # get vector a,b
-        a = np.array([A[0,0], A[1,0], A[2,0]])
-        b = np.array([B[0,0], B[1,0], B[2,0]])
-
-        # calculate Rotation from a to b
-        R = General.GetRotatefrom2Vector(a,b)
-        R_T = np.identity(4)
-        R_T[:3, :3] = R
-        T_T = np.identity(4)
-        T_T[0:3,3] = -A[0:3,3]
-        result = np.dot(R_T, T_T)
-        T_T[0:3,3] = B[0:3,3]
-        result = np.dot(T_T, result)
-
-        # print A
-        # print Tg
-        # print B
-        # print "TBB"
-        # print result
-        # print Tbb
-
-        return result
-    
-
 
 
     def GetCoordSyst(self, pos2d,jt,RGBD, vRGBD, bp, pose):
@@ -814,51 +616,6 @@ class Stitch():
 
         return coord
     
-    def blendMesh(self, pca, bb_cur, bb_prev, vertices):
-        '''
-        change vertices according bb_prev to bb_cur
-        :param pca: RGBD[0].pca[bp]
-        :param bb_cur: bounding-boxes in current frame in global coordinate
-        :param bb_prev: bounding-boxes in previous frame in global coordinate
-        :param vertices: vertices in previous frame in local coordinate
-        :return: vertices in current frame in local coordinate
-        '''
-        '''
-        #initial
-        bbL_cur = pca.transform(bb_cur)
-        bbL_prev = pca.transform(bb_prev)
-        vertices_new = np.zeros((vertices.shape[0], 3))
-        #blending
-        for i in range(vertices.shape[0]):
-            weights = []
-            for b in range(bbL_cur.shape[0]):
-                weights.append(1/np.linalg.norm(vertices[i,:]-bbL_prev[b,:]))
-                vertices_new[i,:]+=(bbL_cur[b,:]-bbL_prev[b,:])*weights[b]
-            vertices_new[i,:]/=sum(weights)
-            vertices_new[i,:]+=vertices[i,:]
-
-        return vertices_new
-        '''
-        #initial
-        bbL_cur = pca.transform(bb_cur)
-        bbL_prev = pca.transform(bb_prev)
-        vertices_new = np.zeros((vertices.shape[0], 3))
-        weights = np.zeros((vertices.shape[0]))
-        diff = bbL_cur-bbL_prev
-        #blending
-        for b in range(bbL_cur.shape[0]):
-            temp_weight = 1/np.linalg.norm(vertices-bbL_prev[b,:], axis=1)
-            vertices_new[:,0] += diff[b,0]*temp_weight
-            vertices_new[:,1] += diff[b,1]*temp_weight
-            vertices_new[:,2] += diff[b,2]*temp_weight
-            weights += temp_weight
-        vertices_new[:,0] /= weights
-        vertices_new[:,1] /= weights
-        vertices_new[:,2] /= weights
-        vertices_new += vertices
-
-        return vertices_new
-        #'''
     def GetPos(self,bp):
         '''
         According to the body parts, get the correct index of junctions
@@ -917,102 +674,3 @@ class Stitch():
             mid = 19
 
         return np.array([pos1,pos2,mid])
-
-
-    def getOverlapping(self, Parts, PoseBP, bp, RGBD):
-        '''
-        get the Overlapping region of one body part
-        :param Parts: the list of Bodyparts
-        :param PoseBP: the list of local to global transform
-        :param bp: number of the body part
-        :param RGBD: the depth image and intrinsic matrix
-        :return: none
-        '''
-        # get bp vertices
-        #initial
-        Vtx = Parts[bp].MC.Vertices
-        Nmls = Parts[bp].MC.Normales
-        Pose = PoseBP[bp]
-        size = RGBD.Size
-        #transform
-        stack_pix = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
-        stack_pt = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
-        pix = np.zeros( (np.size(Vtx[ :,:],0),2) , dtype = np.float32)
-        pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
-        pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
-        pt = np.dot(pt,Pose.T)
-        pt /= pt[:,3].reshape((pt.shape[0], 1))
-        nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
-        nmle[ :,:] = np.dot(Nmls[ :,:],Pose[0:3,0:3].T)
-        #projection in 2D space
-        lpt = np.split(pt,4,axis=1)
-        lpt[2] = General.in_mat_zero2one(lpt[2])
-        pix[ :,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
-        pix[ :,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
-        pix = np.dot(pix,RGBD.intrinsic.T)
-        #get 2d coordinate and index map
-        column_index = (np.round(pix[:,0])).astype(int)
-        line_index = (np.round(pix[:,1])).astype(int)
-        indexmap = np.arange(Vtx.shape[0])
-        #create matrix that have 0 when the conditions are not verified and 1 otherwise
-        cdt_column = (column_index > -1) * (column_index < size[1])
-        cdt_line = (line_index > -1) * (line_index < size[0])
-        cdt = cdt_column*cdt_line
-        line_index = line_index*cdt
-        column_index = column_index*cdt
-        #result 
-        bp_map = np.zeros((size[0], size[1] ,2), dtype=np.float32)
-        bp_map[line_index, column_index,0] = 1*cdt
-        bp_map[line_index, column_index,1] = indexmap
-
-        # get the other bp vertices
-        bp_n_map = np.zeros((size[0], size[1]), dtype=np.float32)
-        for i in range(1,len(PoseBP)):
-            if i==bp:
-                continue
-            #initial
-            Vtx = Parts[i].MC.Vertices
-            Nmls = Parts[i].MC.Normales
-            Pose = PoseBP[i]
-            #transform
-            stack_pix = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
-            stack_pt = np.ones( (np.size(Vtx[ :,:],0)) , dtype = np.float32)
-            pix = np.zeros( (np.size(Vtx[ :,:],0),2) , dtype = np.float32)
-            pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
-            pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
-            pt = np.dot(pt,Pose.T)
-            pt /= pt[:,3].reshape((pt.shape[0], 1))
-            nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
-            nmle[ :,:] = np.dot(Nmls[ :,:],Pose[0:3,0:3].T)
-            #projection in 2D space
-            lpt = np.split(pt,4,axis=1)
-            lpt[2] = General.in_mat_zero2one(lpt[2])
-            pix[ :,0] = (lpt[0]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
-            pix[ :,1] = (lpt[1]/lpt[2]).reshape(np.size(Vtx[ :,:],0))
-            pix = np.dot(pix,RGBD.intrinsic.T)
-            #get 2d coordinate and index map
-            column_index = (np.round(pix[:,0])).astype(int)
-            line_index = (np.round(pix[:,1])).astype(int)
-            #create matrix that have 0 when the conditions are not verified and 1 otherwise
-            cdt_column = (column_index > -1) * (column_index < size[1])
-            cdt_line = (line_index > -1) * (line_index < size[0])
-            cdt = cdt_column*cdt_line
-            line_index = line_index*cdt
-            column_index = column_index*cdt
-            #result
-            bp_n_map[line_index, column_index] = 1*cdt
-        
-        index_i, index_y = np.where(1.0*(bp_map[:,:,0]==1)*(bp_n_map==1)==1)
-        overlap_index = bp_map[index_i,index_y,1].astype(np.int16)
-
-        #set Vertice and Normals
-        if bp==1:
-            self.StitchedVertices = self.TransformVtx(Parts[bp].MC.Vertices[overlap_index,:],PoseBP[bp],1)
-            self.StitchedNormales = self.TransformNmls(Parts[bp].MC.Normales[overlap_index,:],PoseBP[bp],1)
-            
-        else:
-            PartVertices = self.TransformVtx(Parts[bp].MC.Vertices[overlap_index,:],PoseBP[bp],1)
-            PartNormales = self.TransformNmls(Parts[bp].MC.Normales[overlap_index,:],PoseBP[bp],1)
-            self.StitchedVertices = np.concatenate((self.StitchedVertices,PartVertices))
-            self.StitchedNormales = np.concatenate((self.StitchedNormales,PartNormales))
-

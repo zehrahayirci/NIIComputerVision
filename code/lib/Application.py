@@ -206,11 +206,9 @@ class Application(tk.Frame):
     def DrawColors2D(self,RGBD,img):
         """
         Draw the color of each segmented part of the body
-        :param RGBD:
-        :param img:
-        :param Pose:
-        :return:
-        Adding an argument pose would enable to follow the transformation
+        :param RGBD: RGBD object
+        :param img: previous image
+        :return: unage
         """
         newImg = img.copy()
         Txy = RGBD.transCrop
@@ -231,9 +229,8 @@ class Application(tk.Frame):
     def DrawSkeleton2D(self,Pose):
         """
         Sraw the Skeleton of a human and make connections between each part
-        :param Pose:
-        :return:
-                Adding an argument pose would enable to follow the transformation
+        :param Pose: transformation
+        :return
         """
         pos2D = self.pos2d[0][self.Index].astype(np.int16)-1
         pos = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].Vtx[pos2D[:,1], pos2D[:,0]],Pose)
@@ -293,55 +290,6 @@ class Application(tk.Frame):
             for j in range(8):
                 self.DrawPoint2D(pt[j],2,"blue")
     
-    def getGTBB(self, bp, imgIdx):
-        """
-        read ply file and retrun bounding boxes' corners of one body part in one frame
-        """
-        filename = 'C:/Users/nii-user/Desktop/sylvia/project_segmentedfusion/NIIComputerVision/meshes_031_1027_01_GT/'
-        filename += 'BB_' + str(imgIdx) + '_' + str(bp) + '.ply'
-        plydata = PlyData.read(filename)
-        if bp ==10:
-            coords = np.zeros((18,3))
-            vtxIdx = [plydata['face'].data['vertex_indices'][3][1], \
-            plydata['face'].data['vertex_indices'][0][0], \
-            plydata['face'].data['vertex_indices'][0][2], \
-            plydata['face'].data['vertex_indices'][1][2], \
-            plydata['face'].data['vertex_indices'][0][1], \
-            plydata['face'].data['vertex_indices'][2][1], \
-            plydata['face'].data['vertex_indices'][5][0], \
-            plydata['face'].data['vertex_indices'][6][1], \
-            plydata['face'].data['vertex_indices'][4][1], \
-            plydata['face'].data['vertex_indices'][9][1], \
-            plydata['face'].data['vertex_indices'][10][1], \
-            plydata['face'].data['vertex_indices'][12][1], \
-            plydata['face'].data['vertex_indices'][13][1], \
-            plydata['face'].data['vertex_indices'][11][2], \
-            plydata['face'].data['vertex_indices'][8][2], \
-            plydata['face'].data['vertex_indices'][7][0], \
-            plydata['face'].data['vertex_indices'][7][1], \
-            plydata['face'].data['vertex_indices'][7][2], \
-            ]
-            for i in range(len(vtxIdx)):
-                coords[i,0] = plydata.elements[0].data[vtxIdx[i]][0]
-                coords[i,1] = plydata.elements[0].data[vtxIdx[i]][1]
-                coords[i,2] = plydata.elements[0].data[vtxIdx[i]][2]
-        else:
-            coords = np.zeros((8,3))
-            vtxIdx = [plydata['face'].data['vertex_indices'][0][0], \
-            plydata['face'].data['vertex_indices'][0][1], \
-            plydata['face'].data['vertex_indices'][2][1], \
-            plydata['face'].data['vertex_indices'][4][1], \
-            plydata['face'].data['vertex_indices'][0][2], \
-            plydata['face'].data['vertex_indices'][1][1], \
-            plydata['face'].data['vertex_indices'][2][2], \
-            plydata['face'].data['vertex_indices'][4][2]]
-            for i in range(len(vtxIdx)):
-                coords[i,0] = plydata.elements[0].data[vtxIdx[i]][0]
-                coords[i,1] = plydata.elements[0].data[vtxIdx[i]][1]
-                coords[i,2] = plydata.elements[0].data[vtxIdx[i]][2]
-        
-        return coords
-    
     ## Constructor function
     def __init__(self, path,  GPUManager, master=None):
         """
@@ -377,19 +325,18 @@ class Application(tk.Frame):
         TimeStart = time.time()
 
         #load data
-        path2 = 'C:/Users/nii-user/Desktop/sylvia/Kinect_dataset'
         matfilename ='041_1027_01'
-        mat = scipy.io.loadmat(path2 + '/' + matfilename + '.mat')
-        #mat = scipy.io.loadmat(path + '/String4b.mat')
+        mat = scipy.io.loadmat(path + '/' + matfilename + '.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
 
+        # use color image in Segmentation
         if 'Color2DepthImg' in mat:
             ColorImg = mat['Color2DepthImg']
         else:
             ColorImg = np.zeros((0))
         ColorImg = np.zeros((0))
-
+        # initialization
         self.connectionMat = scipy.io.loadmat(path + '/SkeletonConnectionMap.mat')
         self.connection = self.connectionMat['SkeletonConnectionMap']
         self.Pose = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
@@ -399,7 +346,7 @@ class Application(tk.Frame):
         
         # number of images in the sequence. Start and End
         self.Index = 4
-        nunImg = 26
+        nunImg = 8
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -423,7 +370,8 @@ class Application(tk.Frame):
             self.RGBD[bp].Vmap_optimize()   
             self.RGBD[bp].NMap_optimize()
 
-        # show segmentation result
+        # show segmentation result (testing)
+        
         img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         img_label_temp = self.DrawColors2D(self.RGBD[0],img_label_temp)
         img_label = img_label_temp.copy()
@@ -442,7 +390,8 @@ class Application(tk.Frame):
             imgstr = '0'+str(self.Index)
         else:
             imgstr = str(self.Index)
-        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/segment/' + matfilename + '/seg_'+ imgstr +'.png', img_label)
+        cv2.imwrite('../segment/seg_'+ imgstr +'.png', img_label)
+        
 
         # create the transform matrices that transform from local to global coordinate
         self.RGBD[0].myPCA()
@@ -469,7 +418,7 @@ class Application(tk.Frame):
         nbBdyPart = self.RGBD[0].bdyPart.shape[0]+1
         #Initialize stitcher object. It stitches the body parts
         StitchBdy = Stitcher.Stitch(nbBdyPart)
-        boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(self.RGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0], self.RGBD[0])
+        boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(self.RGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0])
         boneTr_all = boneTrans
         boneSubTr_all = boneSubTrans
         # Initialize Body parts
@@ -481,8 +430,10 @@ class Application(tk.Frame):
         BPNml.append(np.array((0,0,0)))
         # Creating mesh of each body part
         for bp in range(bpstart,nbBdyPart):
+            # get dual quaternion of bond's transformation
             boneMDQ, boneJDQ = StitchBdy.getJointInfo(bp, boneTrans, boneSubTrans)
 
+            # create volume
             Parts.append(BdyPrt.BodyParts(self.GPUManager, self.RGBD[0], self.RGBD[bp], Tg[bp]))
             # Compute the 3D Model (TSDF + MC)
             Parts[bp].Model3D_init(bp, boneJDQ)
@@ -505,17 +456,17 @@ class Application(tk.Frame):
             else:
                 StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, self.RGBD[0])
             # save vertex in global of each body part
-            #Parts[1].MC.SaveToPlyExt("GBody"+str(self.Index)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp,1,self.RGBD[0]),Parts[bp].MC.Faces)
-        BPVtxC = BPVtx
+            # Parts[1].MC.SaveToPlyExt("GBody"+str(self.Index)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices,self.RGBD[0].coordsGbl[bp], self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp,1,self.RGBD[0]),Parts[bp].MC.Faces)
+
         # save with the number of the body part
         Parts[1].MC.SaveToPlyExt("wholeBody"+str(self.Index)+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces)
         #Parts[1].MC.SaveToPlyExt("skeleton"+str(self.Index)+".ply",21,0,self.RGBD[0].skeVtx[0, 0:21],[])
         # save the coordinate of the body part
-        for bp in range(bpstart, nbBdyPart):
-            Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsGbl[bp], bp)
-            Parts[1].MC.SaveBBToPlyExt("BBL_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsL[bp], bp)
+        #for bp in range(bpstart, nbBdyPart):
+            #Parts[1].MC.SaveBBToPlyExt("BB_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsGbl[bp], bp)
+            #Parts[1].MC.SaveBBToPlyExt("BBL_"+str(self.Index)+"_"+str(bp)+".ply", self.RGBD[0].coordsL[bp], bp)
 
-        # projection in 2d space to draw the 3D model(meshes)
+        # projection in 2d space to draw the 3D model(meshes) (testing)
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
         rendering_oneVtx = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -546,7 +497,6 @@ class Application(tk.Frame):
                 img_skeleton[self.pos2d[0,self.Index][:,1].astype(np.int16)+i-1, self.pos2d[0,self.Index][:,0].astype(np.int16)+j-1,0:3] = 1000
         # draw Boundingboxes
         for i in range(1,len(self.RGBD[0].coordsGbl)):
-            
             # Get corners of OBB
             pt = self.RGBD[0].GetProjPts2D_optimize(self.RGBD[0].coordsGbl[i],Id4)
             pt[:,0] = np.maximum(0,np.minimum(pt[:,0], self.Size[1]-1))
@@ -638,16 +588,14 @@ class Application(tk.Frame):
             imgstr = '0'+str(self.Index)
         else:
             imgstr = str(self.Index)
-        cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/bb_'+ imgstr +'.png', result_stack*255)
+        cv2.imwrite('../boundingboxes/bb_'+ imgstr +'.png', result_stack*255)
 
         #as prev RGBD
         newRGBD = self.RGBD
         
-        #"""
         # initialize tracker for camera pose
         Tracker = TrackManager.Tracker(0.001, 0.5, 1, [10])
         formerIdx = self.Index
-
         for bp in range(nbBdyPart+1):
             T_Pose.append(Id4)
             
@@ -685,7 +633,8 @@ class Application(tk.Frame):
                 newRGBD[bp].Vmap_optimize()   
                 newRGBD[bp].NMap_optimize()        
             
-            # show segmentation result
+            # show segmentation result (testing)
+            '''
             img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             img_label_temp = self.DrawColors2D(newRGBD[0],img_label_temp)
             img_label = img_label_temp.copy()
@@ -704,10 +653,10 @@ class Application(tk.Frame):
                 imgstr = '0'+str(imgk)
             else:
                 imgstr = str(imgk)
-            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/segment/' + matfilename + '/seg_' + imgstr + '.png', img_label)
+            cv2.imwrite('../segment/seg_'+ imgstr +'.png', img_label)
+            '''
 
-            #'''
-            # creating mesh of whole body
+            # creating mesh of whole body (testing)
             tempVtx = np.zeros((sum(sum(newRGBD[0].Vtx[:,:,2]>0)), 3))
             tempt = 0
             for i in range(newRGBD[0].Vtx.shape[0]):
@@ -718,55 +667,28 @@ class Application(tk.Frame):
             rendering_originmesh = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             rendering_originmesh = self.RGBD[0].DrawMesh(rendering_originmesh,tempVtx,tempVtx,Id4, 1, 1)
             Parts[bp].MC.SaveToPlyExt("wholeBody"+str(imgk)+"_ori.ply",tempt,0,StitchBdy.TransformVtx(tempVtx,self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4,Id4, 0, Id4, bp),[],0)
-            #'''
+            
 
             # create the transform matrix from local to global coordinate
             newRGBD[0].myPCA()
             newRGBD[0].BuildBB()
 
-            # Transform the bounding-boxes into current image
-            #newRGBD[0].skeVtx[0] = Tracker.RegisterSkeleton( self.RGBD[0].skeVtx[0], newRGBD[0].skeVtx[0], BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
-            #boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0], newRGBD[0])
-            boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0], newRGBD[0])
-            for binx in range(20):
+            # Tracking and get transform the bounding-boxes into current image
+            boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(newRGBD[0].skeVtx[0], preRGBD[0].skeVtx[0])
+            for binx in range(20): # first to previous frame + previous to current frame
                 boneTr_all[binx] = np.dot(boneTrans[binx], boneTr_all[binx])
                 boneTrans[binx] = np.dot(np.identity(4), boneTr_all[binx]) 
                 boneSubTrans[binx] = np.dot(np.identity(4), boneSubTr_all[binx])
-            #boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtxC, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
-            #boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtx, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
             boneTrans = Tracker.RegisterBoneTr( boneTrans, BPVtx, BPNml, tempVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, self.RGBD[0].planesF)
             newRGBD[0].coordsGbl, newRGBD[0].BBTrans = StitchBdy.TransfoBBcorners(self.RGBD[0].skeVtx[0], self.RGBD[0].coordsGbl, self.RGBD[0].BBTrans)
-            #newRGBD[0].coordsGbl, newRGBD[0].BBTrans = Tracker.RegisterBBMesh(self.RGBD[0].coordsGbl, newRGBD[0].coordsGbl, BPVtx, newRGBD[0].depth_image, newRGBD[0].intrinsic, newRGBD[0].BBTrans, StitchBdy)
             
-            
-
-            #GT
-            '''
-            for bp in range(1, nbBdyPart):
-                newRGBD[0].coordsGbl[bp] = self.getGTBB(bp, imgk)
-            '''
-            '''
-            # resegment
-            for bp in range(nbBdyPart):
-                if bp == 0:
-                    newRGBD[bp].reSegmentation()
-                    newRGBD[bp].depth_image *= (newRGBD[bp].labels > 0) 
-                else:
-                    newRGBD[bp].depth_image *= (newRGBD[0].labelList[bp] >0)
-                # Vertex and Normal map
-                newRGBD[bp].Vmap_optimize()   
-                newRGBD[bp].NMap_optimize()
-            '''
-            ##
-            #if imgk<13:
-            #    continue
             # Sum of the number of vertices and faces of all body parts
             nb_verticesGlo = 0
             nb_facesGlo = 0
             #Initiate stitcher object 
             StitchBdy = Stitcher.Stitch(nbBdyPart)     
             
-            # projection in 2d space to draw the 3D model(meshes)
+            # projection in 2d space to draw the 3D model(meshes) (testing)
             rendering = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             bbrendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             rendering_oneVtx = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
@@ -779,21 +701,10 @@ class Application(tk.Frame):
             # Updating mesh of each body part
             for bp in range(1,nbBdyPart):
                 print "bp: " + str(bp)
-                # find tranformation from new BB
-                #BB_Pose = Tracker.RegisterBB(newRGBD[0].coordsGbl[bp], preRGBD[0].coordsGbl[bp])
-                #T_Pose[bp] = np.dot(BB_Pose, T_Pose[bp])
 
-                #update transform matrix with camera pose & local pose
-                Tg_new = np.dot(T_Pose[bp],Tg[bp])
-                
                 # get bp's joint information
                 boneMDQ, boneJDQ = StitchBdy.getJointInfo(bp, boneTrans, boneSubTrans)
                 
-                # Put the Global transfo in PoseBP so that the dtype entered in the GPU is correct
-                for i in range(4):
-                    for j in range(4):
-                        PoseBP[bp][i][j] = Tg_new[i][j]#Tg[bp][i][j]#
-
                 # TSDF Fusion of the body part
                 Parts[bp].TSDFManager.FuseRGBD_GPU(newRGBD[bp], boneMDQ[0], boneJDQ[0])
 
@@ -816,11 +727,11 @@ class Application(tk.Frame):
                 else:
                     StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, self.RGBD[0])
 
-                # output mesh in global of each body part
+                # output mesh in global of each body part (testing)
                 #Parts[bp].MC.SaveToPlyExt("GBody"+str(imgk)+"_"+str(bp)+".ply",Parts[bp].MC.nb_vertices[0],Parts[bp].MC.nb_faces[0],StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0]),Parts[bp].MC.Faces,0)
                 #Parts[bp].MC.SaveToPly("body" + str(imgk)+"_" +str(bp) + ".ply")
 
-            # projection in 2d space to draw the 3D model(meshes)
+            # projection in 2d space to draw the 3D model(meshes) (testing)
             rendering = self.RGBD[0].DrawMesh(rendering,StitchBdy.StitchedVertices,StitchBdy.StitchedNormales,Id4, 1, self.color_tag)
 
             formerIdx = imgk
@@ -832,11 +743,11 @@ class Application(tk.Frame):
             Parts[bp].MC.SaveToPlyExt("wholeBody"+imgkStr+".ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
             #Parts[1].MC.SaveToPlyExt("skeleton"+imgkStr+".ply",21,0,newRGBD[0].skeVtx[0, 0:21],[])
             # save the coordinate of the body part
-            for bp in range(bpstart, nbBdyPart):
-                Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0,Id4, bp), bp)
+            #for bp in range(bpstart, nbBdyPart):
+                #Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0,Id4, bp), bp)
 
 
-            # projection in 2d space to draw the 3D model(meshes)
+            # projection in 2d space to draw the 3D model(meshes) (testing)
             # show segmentation result
             img_label_temp = np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             img_label_temp = self.DrawColors2D(newRGBD[0], img_label_temp)
@@ -956,13 +867,13 @@ class Application(tk.Frame):
                 imgstr = '0'+str(imgk)
             else:
                 imgstr = str(imgk)
-            cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/bb_' + imgstr + '.png', result_stack*255)
-            #cv2.imwrite('C:/Users/nii-user/Desktop/sylvia/results/boundingboxes/' + matfilename + '/s_' + imgstr + '_ori.png', img_label*255)
+            cv2.imwrite('../boundingboxes/bb_'+ imgstr +'.png', result_stack*255)
 
         TimeStart_Lapsed = time.time() - TimeStart
         print "total time: %f" %(TimeStart_Lapsed)
-        #"""
+    
 
+        # show UI result
         # projection in 2d space to draw it
         rendering =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
 
@@ -1007,5 +918,5 @@ class Application(tk.Frame):
 
         self.w = tk.Scale(master, from_=1, to=10, orient=tk.HORIZONTAL)
         self.w.pack()
-        exit()
+        
 

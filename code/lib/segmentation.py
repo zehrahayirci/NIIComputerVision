@@ -507,7 +507,7 @@ class Segmentation(object):
 
         # check if intersection is on the head
         if intersection_shoulder[1]<pos2D[3][1]:
-            print("intersection shoulder is upper the head (re)")
+            print("intersection shoulder is upper the head")
             intersection_shoulder[1] = pos2D[2][1]
             intersection_shoulder[0] = np.round(-(b_pen*intersection_shoulder[1]+c_pen)/a_pen)
 
@@ -705,13 +705,13 @@ class Segmentation(object):
             tmp = intersection_shoulder[0]
             intersection_shoulder[0] = intersection_shoulder[1]
             intersection_shoulder[1] = tmp
-            print("line515")
+            print("wrong inline515")
 
         if t[2]<0:
             tmp = intersection_elbow[0]
             intersection_elbow[0] = intersection_elbow[1]
             intersection_elbow[1] = tmp
-            print("line523")
+            print("wrong in line523")
 
         # check if intersection is on the head
         if(side==0):
@@ -752,7 +752,7 @@ class Segmentation(object):
                 d = np.argmin(np.sum( np.square(np.array([pos2D[20,0]-f[1], pos2D[20,1]-f[0]]).transpose()),axis=1 ))
                 peakArmpit = np.array([f[1][d],f[0][d]])
             else:
-                print "the peakArmpit is wrong1"
+                print "the peakArmpit is wrong"
                 peakArmpit = np.array([pos2D[shoulder,0], pos2D[1,1]])
         # constraint on peakArmpit
         if side == 0 and peakArmpit[0]>intersection_elbow[0][0]:
@@ -1157,7 +1157,7 @@ class Segmentation(object):
                 print("thumb")
                 threshold =  labeled[pos2D[thumb,1],pos2D[thumb,0]]
             elif(binaryImage[pos2D[handtip1,1],pos2D[handtip1,0]]!=0 and (pos2D[handtip1,0]-centerpos)*(pos2D[idx,0]-centerpos)>=0 ):
-                print("handtip1 QAQQQQQQ")
+                print("handtip wrong")
                 threshold =  labeled[pos2D[handtip1,1],pos2D[handtip1,0]]
             else:
                 threshold = 1

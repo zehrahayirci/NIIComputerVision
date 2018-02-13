@@ -193,6 +193,7 @@ def GetRotatefrom2Vector(a, b):
     R += Av + 1/(1+c)*np.dot(Av,Av)
     return R
 
+'''Dual Quaternion'''
 def getQuaternionfromMatrix(mat):
     quat = np.zeros(4, dtype=np.float32)
     tr = mat[0,0]+mat[1,1]+mat[2,2]

@@ -44,6 +44,7 @@ class BodyParts():
         """
         Create a 3D model of the body parts
         :param bp: number of the body part
+        :param jointDQ: first frame bind matrix in dual quaternion type
         :return:  none
         """
 
