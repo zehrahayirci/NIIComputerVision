@@ -9,10 +9,13 @@ Created on Thu Mar  2 16:47:40 2017
 import imp
 import numpy as np
 from numpy import linalg as LA
+import math
 from math import sin, cos, acos
 import scipy as sp
 import pandas 
 import warnings
+import copy
+from sklearn.neighbors import NearestNeighbors
 
 RGBD = imp.load_source('RGBD', './lib/RGBD.py')
 General = imp.load_source('General', './lib/General.py')
@@ -68,7 +71,7 @@ def Logarithm(Mat):
     '''
     Inverse of Exponential function. Used to create known transform matrix and test.
     :param Mat: 4*4 transformation matrix
-    :return: a 6D vector containing rotation and translation parameters
+translation    :return: a 6D vector containing rotation and translation parameters
     '''
     trace = Mat[0,0]+Mat[1,1]+Mat[2,2]
     theta = acos((trace-1.0)/2.0)
@@ -159,6 +162,7 @@ class Tracker():
                         if (LA.norm(pt[0:3]) < 0.1):
                             continue
                         pt = np.dot(res, pt)
+                        pt /= pt[3]
                         nmle[0:3] = Image1.Nmls[i*l,j*l][0:3]
                         if (LA.norm(nmle) == 0.):
                             continue
@@ -272,6 +276,7 @@ class Tracker():
                 pix = np.dstack((pix,stack_pix))
                 pt = np.dstack((Image1.Vtx[ ::l, ::l, :],stack_pt))
                 pt = np.dot(res,pt.transpose(0,2,1)).transpose(1,2,0)
+                pt /= pt[:,3].reshape((pt.shape[0], 1))
               
                 # transform normales
                 nmle = np.zeros((Image1.Size[0], Image1.Size[1],Image1.Size[2]), dtype = np.float32)
@@ -405,6 +410,7 @@ class Tracker():
                     if (LA.norm(pt[0:3]) < 0.1):
                         continue
                     pt = np.dot(res, pt)
+                    pt /= pt[3]
                     nmle[0:3] = MeshNmls[i][0:3]
                     if (LA.norm(nmle) == 0.):
                         continue
@@ -528,6 +534,7 @@ class Tracker():
 
                 # transform closer vertices to camera pose
                 pt = np.dot(res,pt.T).T
+                pt /= pt[:,3].reshape((pt.shape[0], 1))
                 # transform closer normales to camera pose
                 nmle = np.zeros((Size[0], Size[1]), dtype = np.float32)
                 nmle[ ::l,:] = np.dot(res[0:3,0:3],MeshNmls[ ::l,:].T).T
@@ -640,226 +647,91 @@ class Tracker():
             return Pose
         
         return res        
-
-    def RegisterAllTs(self, NewImage, NewSkeVtx, PreSkeVtx, Vtx_bp):
+    
+    def RegisterBoneTr(self, boneTransList, VtxList, NmlList, pointcloud, depthImg, intrinsic, planesF):
+        '''        
+        Function that estimate the relative rigid transformation between mesg and point cloud
+        :param boneTransList: bone's transformation of all body part
+        :param VtxList: the vertices of all body part
+        :param NmlList: the normals of all body part
+        :param pointcloud: the input frame vertices
+        :param depthImg, intrinsic, planes: use to calculate the projection and transform 
+        :return: new Transform matrix of all bone's 
         '''
-        Function that estimate the relative rigid transformations of all bodypart between an input RGB-D images and model(vertex) with pre-frame pose
-        :param NewImage: RGBD image
-        :param NewSkeVtx: skeleton vertex
-        :param PreSkeVtx: skeleton vertex
-        :param Vtx_bp: list of vertices list of each body part
-        :return: Transform matrixs between Image and the mesh (transform from the pre-frame model to the current frame)
-        '''
 
-        # Initialize the Transformation of each body part with the skeleton
-        Tr_bp = np.zeros((len(Vtx_bp),4,4), dtype = np.float32)
-        Tr_bp[:,0,0] = 1
-        Tr_bp[:,1,1] = 1
-        Tr_bp[:,2,2] = 1
-        Tr_bp[:,3,3] = 1
-        for bp in range(1,len(Vtx_bp)):
-            p_n = General.getBodypartPoseIndex(bp)
-            meanSkeTran = np.mean(NewSkeVtx[0,p_n,:] - PreSkeVtx[0,p_n,:], axis=0)
-            Tr_bp[bp][0:3,3] = meanSkeTran
-        initTr_bp = Tr_bp 
+        bonelist = [[5,6],[4,5],[20,4],[9,10],[8,9],[20,8], \
+        [13,14],[12,13],[0,12],[17,18],[16,17],[0,16], \
+        [20,2],[2,3],[1,20],[0,1], \
+        [6,7], [10,11],[14,15],[18,19]]
+        boneParent = [1,14,14,4,14,14,7,15,8,10,15,11,14,14,15,15,0,3,6,9]
+        boneorder = [15,14,13,1,0,4,3,7,10,6,9,16,17,18,19]
+        bone2bp = [1,2,10,3,4,10,8,7,10,6,5,10,9,9,10,10,12,11,13,14]
         
-        #Tr_bp = Tr_bp.reshape((240))
-        # sampling
-        Vtx_bp_sample = []
-        Vtx_bp_sample.append(np.zeros((1,3)))
-        for bp in range(1,len(Vtx_bp)):
-            sample_index = np.random.randint(Vtx_bp[bp].shape[0], size = int(Vtx_bp[bp].shape[0]/10))
-            Vtx_bp_sample.append(Vtx_bp[bp][sample_index,:])
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(pointcloud)
 
-        #print Tr_bp.reshape((len(Vtx_bp),4,4))
-        print (RegisterAllTs_function(Tr_bp, initTr_bp,Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+        for bIdx in boneorder:
+            Vtx = VtxList[bone2bp[bIdx]]
+            Nml = NmlList[bone2bp[bIdx]]
+            planeF = planesF[bone2bp[bIdx]]
+            boneTrans = np.identity(4, dtype=np.float32)
+            boneTrans[:] = boneTransList[bIdx,:,:]
+            boneTrans_ori = np.identity(4, dtype=np.float32)
+            boneTrans_ori[:] = boneTransList[bIdx,:,:]
 
-        '''
-        # all Tr
-        #for it in range(self.max_iter[0]):    
-        for it in range(1): 
-            #res = sp.optimize.least_squares(RegisterAllTs_function, Tr_bp, args=( initTr_bp, Vtx[sample_idx,:], Vtx_bp_index[sample_idx],NewImage, NewSkeVtx, PreSkeVtx))
-            res = sp.optimize.minimize(RegisterAllTs_function, Tr_bp, args=( initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx), method='Nelder-Mead')
-            Tr_bp = res.x
-        # check
-        if res.success:
-            print (RegisterAllTs_function(Tr_bp, initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
-        else:
-            print res
-            print (RegisterAllTs_function(Tr_bp, initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
-            print "unsuccessful"
-        '''
-        
-        # each Tr
-        # data term
-        for bp in range(1,len(Vtx_bp)):
-            res = sp.optimize.minimize(RegisterTs_dataterm, Tr_bp[bp,:,:], args=( Vtx_bp[bp], NewImage, NewImage.labels>0), method='Nelder-Mead')
-            Tr_bp[bp] = res.x.reshape(4,4)
-            if res.success==False:
-                print "bp" + str(bp) + " unsuccessful"    
-        
-        # three term
-        for t in range(1):
-            for bp in range(1,len(Vtx_bp)):
-                res = sp.optimize.minimize(RegisterTs_function, Tr_bp[bp,:,:], args=( initTr_bp[bp], Vtx_bp[bp], NewImage, NewSkeVtx, PreSkeVtx, bp, Tr_bp), method='Nelder-Mead')
-                Tr_bp[bp] = res.x.reshape(4,4)
-                if res.success==False:
-                    print "bp" + str(bp) + " unsuccessful"
-        #'''
+            weight = np.dot(Vtx,planeF[0:3].T)+planeF[3]
+            wmap = weight>0
+            weightspara = 0.02
+            weight = np.exp(-weight*weight/2/weightspara/weightspara)
+            wmap = wmap*(weight<0.1)
+            Vtx = np.delete(Vtx, np.where(wmap==0), axis=0)
+            Nml = np.delete(Nml, np.where(wmap==0), axis=0)
+            
+            ## icp
+            stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
+            pt = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+            pt_temp = np.stack( (Vtx[ :,0],Vtx[ :,1],Vtx[ :,2],stack_pt),axis =1 )
+            pt = np.dot(pt, boneTrans.T)
+            pt /= pt[:,3].reshape((pt.shape[0], 1))
+            Vtx = pt[:,0:3]
+            Nml = np.dot(Nml, boneTrans.T[0:3,0:3])
 
-        print (RegisterAllTs_function(Tr_bp, initTr_bp, Vtx_bp, NewImage, NewSkeVtx, PreSkeVtx))
+            for iter in range(15):
+                Vtx_src_cent = np.mean(pt[:,0:3], axis = 0)
+                Vtx_src = pt[:,0:3] - Vtx_src_cent.reshape((1,3))
 
-        return Tr_bp.reshape((len(Vtx_bp),4,4))
+                indices = nbrs.kneighbors(pt[:,0:3], return_distance=False)
+                Vtx_dis = pointcloud[indices[:,0]]
+                Vtx_dis_cent =  np.mean(Vtx_dis, axis = 0)
+                Vtx_dis = Vtx_dis - Vtx_dis_cent.reshape((1,3))
+
+                # optimization
+                DQ = np.zeros((2,4))
+                DQ[0,0] = 1
+                res = sp.optimize.least_squares(ICP_R_ls, DQ.reshape((8)), args=(Vtx_src, Vtx_dis, boneTrans, boneTransList[boneParent[bIdx],:,:], boneTrans_ori, Nml))
+                DQ = res.x.reshape((2,4))
+                R = General.getMatrixfromDualQuaternion(DQ)[0:3,0:3]
+
+                # get translation
+                T = -np.dot(R,Vtx_src_cent.T)+Vtx_dis_cent.T
+                newTr = np.identity(4)
+                newTr[0:3,0:3] = R
+                newTr[0:3,3] = T
+                boneTrans = np.dot(newTr, boneTrans)
+                pt = np.dot(pt_temp, boneTrans.T)
+                Nml = np.dot(Nml, R.T)
+            
+            boneTransList[bIdx,:,:] = boneTrans[:,:]
+                
+        return boneTransList
+
 
 import cv2
+
 # energy function
+def ICP_R_ls(DQ_1D, src, dis, Tr, Trp, Tr_ori, Nml):
+    R = General.getMatrixfromDualQuaternion(DQ_1D.reshape((2,4)))[0:3,0:3]
+    src = np.dot(R, src.T).T
+    Nml = np.dot(R, Nml.T).T
 
-def RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, labels):
-    '''
-    The data term of one body part
-    :param Tr: Transformation of one body part 
-    :param MeshVtx: the Vtx in body part
-    :param NewRGBD: RGBD image
-    :param labels: the label of body part 
-    :retrun: cost list
-    '''  
-    Tr = Tr.reshape(4,4)
-
-    # get the 2Dmap of 3D point of new depth image
-    ImgVtx = NewRGBD.Vtx
-
-    # sample
-    sample_idx = np.random.randint(MeshVtx.shape[0], size = int(MeshVtx.shape[0]/10))
-    sample_idx = np.arange(MeshVtx.shape[0])
-    #MeshVtx = MeshVtx[sample_idx,:]
-
-    size = MeshVtx.shape
-    # find the correspondence 2D point by projection 
-    stack_pix = np.ones(size[0], dtype = np.float32) 
-    stack_pt = np.ones(size[0], dtype = np.float32) 
-    pix = np.zeros((size[0], 2), dtype = np.float32) 
-    pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
-    pt = np.stack((MeshVtx[:,0],MeshVtx[:,1],MeshVtx[:,2],stack_pt),axis = 1)
-    # transform vertices to camera pose
-    pt = np.dot(Tr, pt.T).T
-    # project to 2D coordinate
-    lpt = np.split(pt, 4, axis=1)
-    lpt[2] = General.in_mat_zero2one(lpt[2])
-    # pix[0] = pt[0]/pt[2]
-    pix[:,0] = (lpt[0]/lpt[2]).reshape(size[0])
-    pix[:,1] = (lpt[1]/lpt[2]).reshape(size[0])
-    pix = np.dot(NewRGBD.intrinsic,pix.T).T.astype(np.int16)
-    mask = (pix[:,0]>=0) * (pix[:,0]<NewRGBD.Size[1]) * (pix[:,1]>=0) * (pix[:,1]<NewRGBD.Size[0])
-    mask = mask * (ImgVtx[pix[:,1]*mask,pix[:,0]*mask, 2]>0)
-    # get data term
-    term_data = (pt[:,0:3]-ImgVtx[pix[:,1]*mask, pix[:,0]*mask,:])
-    term_data = LA.norm(term_data, axis=1)*mask
-    term_data[labels[pix[:,1]*mask,pix[:,0]*mask]==0] = 0.5
-
-    # testing
-    #a = labels*0.3
-    #a[pix[:,1],pix[:,0]] += 0.7
-    #cv2.imshow("",a)
-    #cv2.waitKey(1)
-
-    #return term_data
-    return sum(term_data)
-
-def RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp):
-    '''
-    The constraint term of one body part
-    :param Tr: Transformation of one body part 
-    :param NewRGBD: RGBD image
-    :param bp: the index of body part
-    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
-    :retrun: cost list
-    '''  
-
-    bp_n = General.getConnectBP(bp)
-    term_cons = np.zeros(len(bp_n))
-    for i in range(len(bp_n)):
-        term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3])-LA.norm(NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
-        #term_cons[i] = abs(LA.norm(Tr[0:3,3]-Tr_bp[bp_n[i],0:3,3]+NewRGBD.TransfoBB[bp][0:3,3]-NewRGBD.TransfoBB[bp_n[i]][0:3,3]))
-    
-    #return term_cons
-    return sum(term_cons)
-
-
-def RegisterAllTs_function(Tr_bp, initTr_bp, MeshVtx_bp, NewRGBD, NewSkeVtx, PreSkeVtx):
-    '''
-    The energy function with three terms
-    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
-    :param MeshVtx_bp: the list of the Vtx in body part
-    :param NewRGBD: RGBD image
-    :retrun: cost list
-    '''    
-    Tr_bp = Tr_bp.reshape(15,4,4)
-
-    # first term (data term)
-    #term_data = np.zeros(0)
-    term_data = 0
-    for bp in range(1,len(MeshVtx_bp)):
-        term_data_bp = RegisterTs_dataterm(Tr_bp[bp], MeshVtx_bp[bp], NewRGBD, NewRGBD.labels>0)
-        #term_data = np.concatenate((term_data, term_data_bp))
-        term_data = term_data+term_data_bp
-
-
-    # second term(smooth term)
-    term_smooth = np.zeros(14) 
-    for bp in range(1, 15):
-        term_smooth[bp-1] = LA.norm(Tr_bp[bp]-initTr_bp[bp])
-    
-    # third term(constraint term)
-    term_cons = np.zeros(26)
-    t = 0
-    for bp in range(1, len(MeshVtx_bp)):
-        term_cons_bp = RegisterTs_constraintterm(Tr_bp[bp], NewRGBD, bp, Tr_bp)
-        #term_cons[t:t+term_cons_bp.shape[0]] = term_cons_bp
-        term_cons[bp] = term_cons_bp
-        #t += term_cons_bp.shape[0]
-
-    # junction term
-    term_jun = np.zeros(25)
-    stack_jun = np.ones(25, dtype = np.float32) 
-    #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
-    
-
-    # mix
-    #term = np.concatenate((term_data*0.001, term_smooth, term_cons))
-    term = (term_data*0.001)+sum(term_smooth)+sum(term_cons)
-
-    return term
-
-
-def RegisterTs_function(Tr, initTr, MeshVtx, NewRGBD, NewSkeVtx, PreSkeVtx, bp, Tr_bp):
-    '''
-    The energy function with three terms
-    :param Tr: Transformation of one body part 
-    :param initTr: the initialized Transformation of one body part 
-    :param MeshVtx: the Vtx in body part
-    :param NewRGBD: RGBD image
-    :param bp: the index of body part
-    :param Tr_bp: the list of Transformation in each body part (type: np array, size: (15, 4, 4))
-    :retrun: cost list
-    '''    
-    Tr = Tr.reshape(4,4)
-
-    # first term (data term)
-    term_data = RegisterTs_dataterm(Tr, MeshVtx, NewRGBD, NewRGBD.labels>0)
-
-    # second term(smooth term)
-    #Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-    term_smooth = LA.norm(Tr-initTr)
-    
-    # third term(constraint term)
-    term_cons = RegisterTs_constraintterm(Tr, NewRGBD, bp, Tr_bp)
-    
-    # junction term
-    term_jun = np.zeros(25)
-    stack_jun = np.ones(25, dtype = np.float32) 
-    #jun_pre = np.stack((PreSkeVtx[:,0], PreSkeVtx[:,1], PreSkeVtx[:,2], stack_jun), axis=1)
-    
-    # mix
-    term = term_data*0.001+term_smooth+term_cons
-
-    return term
+    #return LA.norm((dis-src))*2 + LA.norm(np.dot(R, Tr[0:3, 0:3])-Trp[0:3, 0:3])
+    return LA.norm((dis-src)*Nml)*2 + LA.norm(np.dot(R, Tr[0:3, 0:3])-Trp[0:3, 0:3]) + LA.norm(np.dot(R, Tr[0:3, 0:3])-Tr_ori[0:3, 0:3])

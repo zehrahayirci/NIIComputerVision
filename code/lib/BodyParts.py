@@ -40,20 +40,23 @@ class BodyParts():
         self.VoxSize = 0.005
 
 
-    def Model3D_init(self,bp):
+    def Model3D_init(self,bp, jointDQ):
         """
         Create a 3D model of the body parts
         :param bp: number of the body part
+        :param jointDQ: first frame bind matrix in dual quaternion type
         :return:  none
         """
 
         # need to put copy transform amtrix in PoseBP for GPU
         PoseBP = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
-
+        Id4DQ = np.array([[1., 0., 0., 0.], [0., 0., 0., 0.]], dtype = np.float32)
+        
         # Compute the dimension of the body part to create the volume
-        Xraw = int(round(LA.norm(self.RGBD.coordsGbl[bp][3] - self.RGBD.coordsGbl[bp][0]) / self.VoxSize)) + 1
-        Yraw = int(round(LA.norm(self.RGBD.coordsGbl[bp][1] - self.RGBD.coordsGbl[bp][0]) / self.VoxSize)) + 1
-        Zraw = int(round(LA.norm(self.RGBD.coordsGbl[bp][4] - self.RGBD.coordsGbl[bp][0]) / self.VoxSize)) + 1
+        wider = self.VoxSize*5
+        Xraw = int(round( (self.RGBD.BBsize[bp][0]+wider*2) / self.VoxSize)) + 1
+        Yraw = int(round( (self.RGBD.BBsize[bp][1]+wider*2) / self.VoxSize)) + 1
+        Zraw = int(round( (self.RGBD.BBsize[bp][2]+wider*2) / self.VoxSize)) + 1
 
         # Dimensions of body part volume
         X = max(Xraw, Zraw)
@@ -68,8 +71,8 @@ class BodyParts():
                 PoseBP[i][j] = self.Tlg[i][j]
 
         # TSDF Fusion of the body part
-        self.TSDFManager = TSDFtk.TSDFManager((X, Y, Z), self.RGBD_BP, self.GPUManager)
-        self.TSDFManager.FuseRGBD_GPU(self.RGBD_BP, PoseBP)
+        self.TSDFManager = TSDFtk.TSDFManager((X, Y, Z), self.RGBD_BP, self.GPUManager, self.RGBD.planesF[bp], PoseBP)
+        self.TSDFManager.FuseRGBD_GPU(self.RGBD_BP, Id4DQ, jointDQ)
 
         # Create Mesh
         self.MC = My_MC.My_MarchingCube(self.TSDFManager.Size, self.TSDFManager.res, 0.0, self.GPUManager)
@@ -79,7 +82,7 @@ class BodyParts():
 
         # save with the number of the body part
         bpStr = str(bp)
-        self.MC.SaveToPly("body" + bpStr + ".ply")
+        self.MC.SaveToPly("body0_" + bpStr + ".ply")
         elapsed_time = time.time() - start_time3
         print "SaveBPToPly: %f" % (elapsed_time)
 

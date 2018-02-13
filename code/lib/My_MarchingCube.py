@@ -179,7 +179,74 @@ class My_MarchingCube():
             elapsed_time = time.time() - start_time3
             print "SaveToPly: %f" % (elapsed_time)
         
-                    
+    def SaveBBToPlyExt(self, name,Vertices,bp, display = 0):
+        """
+        Function to record an bounding box mesh into a .ply file
+        Create file .ply with vertices and faces for vizualization in MeshLab
+        :param name: string, name of the file
+        :param Vertices: array 8*3,
+        :param bp: index of body index
+        :param display: int, 0 if you do not want to display the time
+        :return: none
+        """
+        if display != 0:
+            start_time3 = time.time()
+        path = '../meshes/'
+        f = open(path+name, 'wb')
+        
+        nb_vertices = 8
+        nb_faces = 12
+        if bp==10:
+            nb_faces = 32
+            nb_vertices = 18
+
+        # Write headers
+        f.write("ply\n")
+        f.write("format ascii 1.0\n")
+        f.write("comment ply file created by Diego Thomas\n")
+        f.write("element vertex %d \n" %(nb_vertices))
+        f.write("property float x\n")
+        f.write("property float y\n")
+        f.write("property float z\n")
+        f.write("element face %d \n" %(nb_faces))
+        f.write("property list uchar int vertex_indices\n")
+        f.write("end_header\n")
+        
+        # Write vertices
+        for i in range(nb_vertices):
+            f.write("%f %f %f \n" %(Vertices[i,0], Vertices[i,1], Vertices[i,2]))
+            
+        # Write the faces
+        if nb_faces==12:
+            f.write("3 0 1 4 \n 3 1 5 4 \n")
+            f.write("3 1 2 6 \n 3 1 6 5 \n")
+            f.write("3 2 3 7 \n 3 2 7 6 \n")
+            f.write("3 3 0 4 \n 3 3 4 7 \n")
+            f.write("3 4 5 6 \n 3 4 6 7 \n")
+            f.write("3 3 2 0 \n 3 0 2 1 \n")
+        else:
+            f.write("3 1 4 2 \n 3 2 4 3 \n")
+            f.write("3 1 5 4 \n 3 1 0 5 \n")
+            f.write("3 0 8 5 \n 3 6 5 8 \n")
+            f.write("3 8 7 6 \n 3 15 16 17 \n")
+            f.write("3 15 17 14 \n 3 17 9 14 \n")
+            f.write("3 9 10 14 \n 3 14 10 13 \n")
+            f.write("3 10 11 13 \n 3 11 12 13 \n")
+            f.write("3 11 1 2 \n 3 11 10 1 \n")
+            f.write("3 10 0 1 \n 3 10 9 0 \n")
+            f.write("3 9 8 0 \n 3 9 17 8 \n")
+            f.write("3 17 7 8 \n 3 17 16 7 \n")
+            f.write("3 16 6 7 \n 3 16 15 6 \n")
+            f.write("3 15 5 6 \n 3 15 14 5 \n")
+            f.write("3 14 4 5 \n 3 14 13 4 \n")
+            f.write("3 13 3 4 \n 3 13 12 3 \n")
+            f.write("3 12 2 3 \n 3 12 11 2 \n")
+
+        f.close()
+
+        if display != 0:
+            elapsed_time = time.time() - start_time3
+            print "SaveToPly: %f" % (elapsed_time)                
 
     def DrawMesh(self, Pose, intrinsic, Size, canvas):
         '''
@@ -197,6 +264,7 @@ class My_MarchingCube():
                 pt[1] = self.Vertices[self.Faces[i,k],1]
                 pt[2] = self.Vertices[self.Faces[i,k],2]
                 pt = np.dot(Pose, pt)
+                pt /= pt[3]
                 pix[0] = pt[0]/pt[2]
                 pix[1] = pt[1]/pt[2]
                 pix = np.dot(intrinsic, pix)
@@ -223,6 +291,7 @@ class My_MarchingCube():
         pt = np.ones(((np.size(self.Vertices, 0)-1)/s+1, np.size(self.Vertices, 1)+1))
         pt[:,:-1] = self.Vertices[::s, :]
         pt = np.dot(Pose,pt.transpose()).transpose()
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         #nmle = np.zeros((self.Size[0], self.Size[1],self.Size[2]), dtype = np.float32)
         #nmle[ ::s, ::s,:] = np.dot(Pose[0:3,0:3],self.Nmls[ ::s, ::s,:].transpose(0,2,1)).transpose(1,2,0)
         
@@ -250,7 +319,8 @@ class My_MarchingCube():
         '''
         stack_pt = np.ones(np.size(self.Vertices,0), dtype = np.float32)
         pt = np.stack((self.Vertices[:,0],self.Vertices[:,1],self.Vertices[:,2], stack_pt),axis =1)
-        self.Vertices = np.dot(Pose,pt.T).T[:, 0:3]
+        pt = np.dot(Pose,pt.T).T
+        self.Vertices = pt/pt[:,3].reshape((pt.shape[0], 1))
         self.Normales = np.dot(Pose[0:3,0:3],self.Normales.T).T                      
                     
 
@@ -412,6 +482,7 @@ class My_MarchingCube():
         pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(Pose,pt.T).T
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         # Transform normales in the camera pose
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Pose[0:3,0:3],Nmls[ ::s,:].T).T

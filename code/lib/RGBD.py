@@ -14,7 +14,9 @@ import scipy.ndimage.measurements as spm
 import pdb
 from skimage import img_as_ubyte
 from sklearn.decomposition import PCA
-
+from sklearn.cluster import KMeans
+import copy
+from skimage.draw import line_aa
 
 segm = imp.load_source('segmentation', './lib/segmentation.py')
 General = imp.load_source('General', './lib/General.py')
@@ -39,7 +41,7 @@ class RGBD():
         self.intrinsic = intrinsic
         self.fact = fact
         
-    def LoadMat(self, Images,Pos_2D,BodyConnection):
+    def LoadMat(self, Images,Pos_2D,BodyConnection, ColorImg):
         """
         Load information in datasets into the RGBD object
         :param Images: List of depth images put in function of time
@@ -48,6 +50,10 @@ class RGBD():
         :return:  none
         """
         self.lImages = Images
+        self.CImages = ColorImg
+        self.hasColor = True
+        if self.CImages.shape[0]==0:
+            self.hasColor = False
         self.numbImages = len(self.lImages.transpose()) # useless
         self.Index = -1
         self.pos2d = Pos_2D
@@ -84,6 +90,7 @@ class RGBD():
         size_depth = depth_in.shape
         self.Size = (size_depth[0], size_depth[1], 3)
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
+        self.depth_image_ori = depth_in
         self.depth_image = depth_in.astype(np.float32) / self.fact
         # self.skel = self.depth_image.copy() # useless
 
@@ -92,6 +99,10 @@ class RGBD():
         self.pos2d[0,idx][:,1] = (np.maximum(0, self.pos2d[0, idx][:,1]))
         self.pos2d[0,idx][:,0] = (np.minimum(self.Size[1], self.pos2d[0, idx][:,0]))
         self.pos2d[0,idx][:,1] = (np.minimum(self.Size[0], self.pos2d[0, idx][:,1]))
+
+        # get kmeans of image
+        if self.hasColor:
+            self.color_image = self.CImages[0][self.Index]
 
     #####################################################################
     ################### Map Conversion Functions #######################
@@ -200,6 +211,7 @@ class RGBD():
                 pt[1] = self.Vtx[i*s,j*s][1]
                 pt[2] = self.Vtx[i*s,j*s][2]
                 pt = np.dot(Pose, pt)
+                pt = pt/pt[:,3].reshape((pt.shape[0], 1))
                 nmle[0] = self.Nmls[i*s,j*s][0]
                 nmle[1] = self.Nmls[i*s,j*s][1]
                 nmle[2] = self.Nmls[i*s,j*s][2]
@@ -235,6 +247,7 @@ class RGBD():
         pix = np.dstack((pix,stack_pix))
         pt = np.dstack((self.Vtx[ ::s, ::s, :],stack_pt))
         pt = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         nmle = np.zeros((self.Size[0], self.Size[1],self.Size[2]), dtype = np.float32)
         nmle[ ::s, ::s,:] = np.dot(Pose[0:3,0:3],self.Nmls[ ::s, ::s,:].transpose(0,2,1)).transpose(1,2,0)
         #if (pt[2] != 0.0):
@@ -280,7 +293,7 @@ class RGBD():
         pix = np.stack((pix[:,0],pix[:,1],stack_pix),axis = 1)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(pt,Pose.T)
-
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Pose[0:3,0:3].T)
         
@@ -322,7 +335,9 @@ class RGBD():
         """
         stack_pt = np.ones((np.size(self.Vtx,0), np.size(self.Vtx,1)), dtype = np.float32)
         pt = np.dstack((self.Vtx, stack_pt))
-        self.Vtx = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)[:, :, 0:3]
+        pt = np.dot(Pose,pt.transpose(0,2,1)).transpose(1,2,0)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
+        self.Vtx = pt[:,:,0:3]
         self.Nmls = np.dot(Pose[0:3,0:3],self.Nmls.transpose(0,2,1)).transpose(1,2,0)
 
     def project3D22D(self, vtx, Tr= np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)):
@@ -397,6 +412,7 @@ class RGBD():
         # distance head to neck. Let us assume this is enough for all borders
         distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)+15
         Box = self.depth_image
+        Box_ori = self.depth_image_ori
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
@@ -409,6 +425,9 @@ class RGBD():
 
         self.transCrop = np.array([colStart,lineStart,colEnd,lineEnd])
         self.CroppedBox = Box[lineStart:lineEnd,colStart:colEnd]
+        self.CroppedBox_ori = Box_ori[lineStart:lineEnd,colStart:colEnd]
+        if self.hasColor:
+            self.CroppedBox_color = self.color_image[lineStart:lineEnd,colStart:colEnd]
         self.CroppedPos = (pos2D -self.transCrop[0:2]).astype(np.int16)
 
     def BdyThresh(self):
@@ -470,6 +489,33 @@ class RGBD():
         handLeft = ( self.segm.GetHand( MidBdyImage,left))
         footRight = ( self.segm.GetFoot( MidBdyImage,right))
         footLeft = ( self.segm.GetFoot( MidBdyImage,left))
+        
+        # handle the ground near the foot
+        if self.hasColor:    
+            a = (footRight*1.0).reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1],1)) *self.CroppedBox_color
+            #cv2.imshow("a", a) 
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],3))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footRight = (labeled==labeled[self.CroppedPos[19][1]-1, self.CroppedPos[19][0]-1+5])
+            #cv2.imshow("", labeled*1.0/3)
+            #cv2.waitKey()
+            a = (footLeft*1.0).reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1],1)) *self.CroppedBox_color
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],3))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footLeft = (labeled==labeled[self.CroppedPos[15][1]-1, self.CroppedPos[15][0]-1+5])
+        else:
+            a = (footRight*1.0) *self.CroppedBox_ori
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],1))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footRight = (labeled==labeled[self.CroppedPos[19][1]-1, self.CroppedPos[19][0]-1])
+            a = (footLeft*1.0) *self.CroppedBox_ori
+            a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],1))
+            labeled = KMeans(n_clusters=3).fit(a).labels_
+            labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
+            footLeft = (labeled==labeled[self.CroppedPos[15][1]-1, self.CroppedPos[15][0]-1])
 
         # display the trunck
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
@@ -524,14 +570,53 @@ class RGBD():
     def BodyLabelling(self):
         '''Create label for each body part in the depth_image'''
         Size = self.depth_image.shape
-        self.labels = np.zeros(Size,np.int)   
+        self.labels = np.zeros(Size,np.int)
+        self.labelList = np.zeros((self.bdyPart.shape[0]+1, Size[0], Size[1]),np.int)
         Txy = self.transCrop
         for i in range(self.bdyPart.shape[0]): 
-            self.labels[Txy[1]:Txy[3],Txy[0]:Txy[2]] += (i+1)*self.bdyPart[i]
+            self.labels[Txy[1]:Txy[3],Txy[0]:Txy[2]] += (i+1)*self.bdyPart[i]            
+            self.labelList[i+1, Txy[1]:Txy[3],Txy[0]:Txy[2]] += (self.bdyPart[i] + self.overlapmap[i])
+            self.labelList[i+1] = (self.labelList[i+1]>0)
             # if some parts overlay, the number of this part will bigger
             overlap = np.where(self.labels > (i+1) )
             #put the overlapping part in the following body part
             self.labels[overlap] = i+1
+
+    def AddOverlap(self):
+        """
+        add overlap region to each body part
+        """
+        interLineList = copy.deepcopy([\
+        [[self.segm.foreArmPtsL[0], self.segm.foreArmPtsL[1]], [self.segm.foreArmPtsL[2], self.segm.foreArmPtsL[3]]], \
+        [[self.segm.upperArmPtsL[0], self.segm.upperArmPtsL[3]], [self.segm.upperArmPtsL[1], self.segm.upperArmPtsL[2]]], \
+        [[self.segm.foreArmPtsR[0], self.segm.foreArmPtsR[1]], [self.segm.foreArmPtsR[2], self.segm.foreArmPtsR[3]]], \
+        [[self.segm.upperArmPtsR[0], self.segm.upperArmPtsR[3]], [self.segm.upperArmPtsR[2], self.segm.upperArmPtsR[1]]], \
+        [[self.segm.thighPtsR[0], self.segm.thighPtsR[1]], [self.segm.thighPtsR[2], self.segm.thighPtsR[3]]], \
+        [[self.segm.calfPtsR[0], self.segm.calfPtsR[1]], [self.segm.calfPtsR[2], self.segm.calfPtsR[3]]],
+        [[self.segm.thighPtsL[0],  self.segm.thighPtsL[1]], [self.segm.thighPtsL[2],self.segm.thighPtsL[3]]], \
+        [[self.segm.calfPtsL[0], self.segm.calfPtsL[1]], [self.segm.calfPtsL[2], self.segm.calfPtsL[3]]], \
+        [[self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy()]], \
+        [[self.segm.upperArmPtsL[2], self.segm.upperArmPtsL[1]], [self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy()], [self.segm.upperArmPtsR[1], self.segm.upperArmPtsR[2]], [self.segm.thighPtsR[1], self.segm.thighPtsR[0]], [self.segm.thighPtsR[0], self.segm.thighPtsL[1]]], \
+        [[self.segm.foreArmPtsR[3], self.segm.foreArmPtsR[2]]], \
+        [[self.segm.foreArmPtsL[3], self.segm.foreArmPtsL[2]]], \
+        [[self.segm.calfPtsL[1], self.segm.calfPtsL[0]]], \
+        [[self.segm.calfPtsR[1], self.segm.calfPtsR[0]]], \
+        ])
+        self.overlapmap = np.zeros((14, self.CroppedBox.shape[0], self.CroppedBox.shape[1]), np.int)
+        a = np.zeros((self.CroppedBox.shape[0], self.CroppedBox.shape[1]), np.int)
+        for i in range(len(interLineList)):
+            interLines = interLineList[i]
+            for j in range(len(interLines)):
+                interPoints = interLines[j]
+                rr,cc,val = line_aa(int(interPoints[0][1]), int(interPoints[0][0]), int(interPoints[1][1]), int(interPoints[1][0]))
+                self.overlapmap[i, rr, cc]=2
+            '''    
+            Txy = self.transCrop
+            a += self.overlapmap[i]
+            a += self.bdyPart[i]
+        cv2.imshow("", a.astype(np.double)/2)
+        cv2.waitKey()
+        '''
 
     def RGBDSegmentation(self):
         """
@@ -540,8 +625,8 @@ class RGBD():
         """
         self.Crop2Body()
         self.BodySegmentation()
+        self.AddOverlap()
         self.BodyLabelling()
-
 
 
 #######################################################################
@@ -671,8 +756,9 @@ class RGBD():
                 j=6
             elif i==19:
                 j=14
-            
-            depth = abs(self.coordsGbl[j][4,2]-self.coordsGbl[j][0,2])/2
+
+            depth = abs(np.amax(self.coordsGbl[j][:,2])-np.amin(self.coordsGbl[j][0,2]))/2
+            depth = 0
             if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:                
                 skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
             else:
@@ -686,16 +772,23 @@ class RGBD():
                 elif self.labels[int(pos2D[i][1]), int(pos2D[i][0])-1]!=0:
                     skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])-1]+depth
                 else:
-                    "QAQQQQ"
-                    exit()
-
+                    print "QAQQQQ"
+                    #exit()
+    
         #  project to 3D
         pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
         pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
         x = skedepth * pos2D[:,0]
         y = skedepth * pos2D[:,1]
         z = skedepth
-        return np.dstack((x,y,z))    
+        
+        # give hand and foot't joint correct
+        for i in [7,11,15,19]:
+            x[i] = (x[i-1]-x[i-2])/4+x[i-1]
+            y[i] = (y[i-1]-y[i-2])/4+y[i-1]
+            z[i] = (z[i-1]-z[i-2])/4+z[i-1]
+
+        return np.dstack((x,y,z)).astype(np.float32)  
     
            
     def myPCA(self, dims_rescaled_data=3):
@@ -727,6 +820,8 @@ class RGBD():
         self.coordsGbl.append([0.,0.,0.])
         self.mask=[]
         self.mask.append([0.,0.,0.])
+        self.BBsize = []
+        self.BBsize.append([0.,0.,0.])
         for i in range(1,self.bdyPart.shape[0]+1):
             self.mask.append( (self.labels == i) )
             # compute center of 3D
@@ -759,7 +854,7 @@ class RGBD():
         '''     
         # Adding a space so that the bounding boxes are wider
         VoxSize = 0.005
-        wider = 5*VoxSize
+        wider = 5*VoxSize*0
         # extremes planes of the bodies
         minX = np.min(self.TVtxBB[i][:,0]) - wider
         maxX = np.max(self.TVtxBB[i][:,0]) + wider
@@ -776,7 +871,7 @@ class RGBD():
         xYmZ = np.array([minX,maxY,maxZ])
         XymZ = np.array([maxX,minY,maxZ])
         XYmZ = np.array([maxX,maxY,maxZ])           
-
+        
         # New coordinates and new images
         self.coordsL.append( np.array([xymz,xYmz,XYmz,Xymz,xymZ,xYmZ,XYmZ,XymZ]) )
         #print "coordsL[%d]" %(i)
@@ -786,8 +881,314 @@ class RGBD():
         self.coordsGbl.append( self.pca[i].inverse_transform(self.coordsL[i]))
         #print "coordsGbl[%d]" %(i)
         #print self.coordsGbl[i]
-            
 
+        # save the boundingboxes size
+        self.BBsize.append([LA.norm(self.coordsGbl[i][3] - self.coordsGbl[i][0]), LA.norm(self.coordsGbl[i][1] - self.coordsGbl[i][0]), LA.norm(self.coordsGbl[i][4] - self.coordsGbl[i][0])])
+
+    def BuildBB(self):
+        """
+        build bounding boxes to let no overlapping bounding boxes
+        :return: none
+        """
+        # settings
+        interPointList = copy.deepcopy([[], \
+        [self.segm.foreArmPtsL[0], self.segm.foreArmPtsL[1], self.segm.foreArmPtsL[2], self.segm.foreArmPtsL[3]], \
+        [self.segm.upperArmPtsL[0], self.segm.upperArmPtsL[1], self.segm.upperArmPtsL[2], self.segm.upperArmPtsL[3]], \
+        [self.segm.foreArmPtsR[0], self.segm.foreArmPtsR[1], self.segm.foreArmPtsR[2], self.segm.foreArmPtsR[3]], \
+        [self.segm.upperArmPtsR[0], self.segm.upperArmPtsR[3], self.segm.upperArmPtsR[2], self.segm.upperArmPtsR[1]], \
+        [self.segm.thighPtsR[0], self.segm.thighPtsR[1], self.segm.thighPtsR[2], self.segm.thighPtsR[3]], \
+        [self.segm.calfPtsR[0], self.segm.calfPtsR[1], self.segm.calfPtsR[2], self.segm.calfPtsR[3]],
+        [self.segm.thighPtsL[0], self.segm.thighPtsL[3], self.segm.thighPtsL[2], self.segm.thighPtsL[1]], \
+        [self.segm.calfPtsL[0], self.segm.calfPtsL[1], self.segm.calfPtsL[2], self.segm.calfPtsL[3]], \
+        [self.segm.peakshoulderL.copy(), self.segm.headPts[1], self.segm.headPts[0], self.segm.peakshoulderR.copy()], \
+        [self.segm.upperArmPtsL[2], self.segm.upperArmPtsL[1], self.segm.peakshoulderL.copy(), self.segm.peakshoulderR.copy(), self.segm.upperArmPtsR[1], self.segm.upperArmPtsR[2], self.segm.thighPtsR[1], self.segm.thighPtsR[0], self.segm.thighPtsL[1]], \
+        [self.segm.foreArmPtsR[3], self.segm.foreArmPtsR[2]], \
+        [self.segm.foreArmPtsL[3], self.segm.foreArmPtsL[2]], \
+        [self.segm.calfPtsL[1], self.segm.calfPtsL[0]], \
+        [self.segm.calfPtsR[1], self.segm.calfPtsR[0]], \
+        ])
+        interPointList2D = copy.deepcopy(interPointList)
+        labelList = [[],[2,2,12,12], [2,2,2,2], [4,4,11,11], [4,4,4,4], [5,5,5,5], [6,6,5,5], [5,7,7,7], [8,8,7,7], \
+        [9,9,9,9], [2,2,9,9,4,4,5,5,7], [11,11,11,11], [12,12,12,12], [8,8,13,13], [6,6,14,14]]
+        t=0
+        
+
+        #2D 2 3D
+        for i in range(1, len(interPointList)):
+            for j in range(len(interPointList[i])):
+                depth = sum(sum(self.depth_image*(self.labels==labelList[i][j])))/sum(sum(self.labels==labelList[i][j]))
+
+                # point = [x,y]
+                # move positions from cropped box to original size
+                interPointList[i][j] = map(float, interPointList[i][j])
+                interPointList[i][j][0] = float(interPointList[i][j][0] + self.transCrop[0])
+                interPointList[i][j][1] = float(interPointList[i][j][1] + self.transCrop[1])
+                # project to 3D coordinate
+                interPointList[i][j][0] = ( interPointList[i][j][0] - self.intrinsic[0,2])/self.intrinsic[0,0]*depth
+                interPointList[i][j][1] = ( interPointList[i][j][1] - self.intrinsic[1,2])/self.intrinsic[1,1]*depth                   
+                interPointList[i][j].append(depth)
+                t+=1
+        
+        # for each body part
+        self.coordsGbl = []
+        self.coordsGbl.append(np.array((0,0,0)))
+        self.BBTrans = []
+        self.BBTrans.append(np.identity(4))
+
+        for bp in range(1,len(interPointList)):
+            points = interPointList[bp]
+            
+            if bp==11 or bp==12:
+                if bp==12:
+                    point2 = [interPointList[1][0][0]/2+interPointList[1][1][0]/2, interPointList[1][0][1]/2+interPointList[1][1][1]/2, interPointList[1][0][2]/2+interPointList[1][1][2]/2]
+                if bp==11:
+                    point2 = [interPointList[3][0][0]/2+interPointList[3][1][0]/2, interPointList[3][0][1]/2+interPointList[3][1][1]/2, interPointList[3][0][2]/2+interPointList[3][1][2]/2]
+                point1 = [points[0][0]/2+points[1][0]/2, points[0][1]/2+points[1][1]/2, points[0][2]/2+points[1][2]/2]
+                vector = [point1[0]-point2[0],point1[1]-point2[1],point1[2]-point2[2]]
+                vector = vector/np.linalg.norm(vector)*0.25
+                points.append(points[1]+vector)
+                points.append(points[0]+vector)
+                if abs(vector[0])>abs(vector[1]):
+                    if points[2][1]<points[3][1]:
+                        points[2][1] -= 0.1
+                        points[3][1] += 0.1
+                    else:
+                        points[2][1] += 0.1
+                        points[3][1] -= 0.1
+                else:
+                    if points[2][0]>points[3][0]:
+                        points[2][0] += 0.1
+                        points[3][0] -= 0.1
+                    else:
+                        points[2][0] -= 0.1
+                        points[3][0] += 0.1
+                
+            if bp==13 or bp==14:
+                if bp==13:
+                    point2 = [interPointList[8][2][0]/2+interPointList[8][3][0]/2, interPointList[8][2][1]/2+interPointList[8][3][1]/2, interPointList[8][2][2]/2+interPointList[8][3][2]/2]
+                if bp==14:
+                    point2 = [interPointList[6][2][0]/2+interPointList[6][3][0]/2, interPointList[6][2][1]/2+interPointList[6][3][1]/2, interPointList[6][2][2]/2+interPointList[6][3][2]/2]
+                point1 = [points[0][0]/2+points[1][0]/2, points[0][1]/2+points[1][1]/2, points[0][2]/2+points[1][2]/2]
+                vector = [point1[0]-point2[0],point1[1]-point2[1],point1[2]-point2[2]]
+                vector = vector/np.linalg.norm(vector)*0.25
+                points.append(points[1]+vector+[0.05,0,0])
+                points.append(points[0]+vector+[-0.05,0,0])
+
+            coordGbl =  np.zeros((len(points)*2,3), dtype=np.float32)
+            BBTrans = np.zeros((len(points)*2,4,4), dtype=np.float32)
+            # for each line of one body part
+            for p in range(len(points)):
+                # get depth
+                if (bp==11 or bp==12 or bp==13 or bp==14) and (p==2 or p==3):
+                    point2d = interPointList2D[bp][3-p]
+                else:
+                    point2d = interPointList2D[bp][p]
+                if (bp==6 or bp==8 or bp==13 or bp==14) and (p==0 or p==1):
+                    depthMax = np.amax(np.amax(self.depth_image*(self.labels==labelList[bp][p])))
+                    depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*(self.labels==labelList[bp][p]))]))
+                elif bp==9 and (p==1 or p==2):
+                    depthMax = np.amax(np.amax(self.depth_image*(self.labels==labelList[bp][p])))
+                    depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*(self.labels==labelList[bp][p]))]))
+                else:
+                    line = self.depth_image.shape[0]
+                    col = self.depth_image.shape[1]
+                    mask = np.ones([line,col,2])
+                    mask = mask*point2d
+                    mask[:,:,0]+= self.transCrop[0]
+                    mask[:,:,1]+= self.transCrop[1]
+                    lineIdx = np.array([np.arange(line) for _ in range(col)]).transpose()
+                    colIdx = np.array([np.arange(col) for _ in range(line)])
+                    ind = np.stack( (colIdx,lineIdx), axis = 2)
+                    mask = np.sqrt(np.sum( (ind-mask)*(ind-mask),axis = 2))
+                    mask = (mask < 16)
+                    depthMax = np.amax(np.amax(self.depth_image*mask))
+                    depthMin = np.amin(np.amin(self.depth_image[np.nonzero(self.depth_image*mask)]))
+
+                point = points[p]
+                coordGbl[p] = np.array([point[0], point[1], depthMin])
+                coordGbl[p+len(points)] = np.array([point[0], point[1], depthMax])
+                BBTrans[p] = np.identity(4)
+                BBTrans[p+len(points)] = np.identity(4)
+            self.coordsGbl.append(coordGbl)
+            self.BBTrans.append(BBTrans)
+        
+        # update local coordinate
+        self.coordsL = []
+        self.coordsL.append([0.,0.,0.])
+        self.BBsize = []
+        self.BBsize.append([0.,0.,0.])
+        for bp in range(1,15):
+            self.coordsL.append(self.pca[bp].transform(self.coordsGbl[bp]).astype(np.float32))
+            minX = np.min(self.coordsL[bp][:,0]) 
+            maxX = np.max(self.coordsL[bp][:,0])
+            minY = np.min(self.coordsL[bp][:,1]) 
+            maxY = np.max(self.coordsL[bp][:,1])
+            minZ = np.min(self.coordsL[bp][:,2])
+            maxZ = np.max(self.coordsL[bp][:,2])
+            self.BBsize.append([LA.norm(maxX - minX), LA.norm(maxY - minY), LA.norm(maxZ - minZ)])
+    
+
+    def getWarpingPlanes(self):
+        """
+        Get the area function which is used to compute weight when warping, in all body part
+        :param self.skeVtx self.coordsGbl
+        :retrun self.planesF
+        """
+        self.planesF = np.zeros((15,4), dtype=np.float32)
+        for bp in range(1,15):
+            if bp==1:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2 
+                boneV_p = self.skeVtx[0][5]-self.skeVtx[0][4]
+                boneV = self.skeVtx[0][6]-self.skeVtx[0][5]
+                point = self.skeVtx[0][5]
+            elif bp==2:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 2
+                planeIdx[0,1] = 1
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][20]-self.skeVtx[0][1]
+                boneV_p[0], boneV_p[1] = boneV_p[1], boneV_p[0]
+                boneV_p[2] = 0
+                boneV = self.skeVtx[0][5]-self.skeVtx[0][4]
+                point = self.skeVtx[0][4]
+            elif bp==3:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 1
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][9]-self.skeVtx[0][8]
+                boneV = self.skeVtx[0][10]-self.skeVtx[0][9]
+                point = self.skeVtx[0][9]
+            elif bp==4:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 3
+                planeIdx[0,1] = 2
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][20]-self.skeVtx[0][1]
+                boneV_p[0], boneV_p[1] = -boneV_p[1], -boneV_p[0]
+                boneV_p[2] = 0
+                boneV = self.skeVtx[0][9]-self.skeVtx[0][8]
+                point = self.skeVtx[0][8]
+            elif bp==5:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][0]-self.skeVtx[0][1]
+                boneV = self.skeVtx[0][17]-self.skeVtx[0][16]
+                point = self.skeVtx[0][16]
+            elif bp==6:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 3
+                planeIdx[0,1] = 2
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][17]-self.skeVtx[0][16]
+                boneV = self.skeVtx[0][18]-self.skeVtx[0][17]
+                point = self.skeVtx[0][17]
+            elif bp==7:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 3
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][0]-self.skeVtx[0][1]
+                boneV = self.skeVtx[0][13]-self.skeVtx[0][12]
+                point = self.skeVtx[0][12]
+            elif bp==8:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 3
+                planeIdx[0,1] = 2
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 0
+                boneV_p = self.skeVtx[0][13]-self.skeVtx[0][12]
+                boneV = self.skeVtx[0][14]-self.skeVtx[0][13]
+                point = self.skeVtx[0][13]
+            elif bp==9:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 3
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 1
+                boneV_p = self.skeVtx[0][20]-self.skeVtx[0][1]
+                boneV = self.skeVtx[0][3]-self.skeVtx[0][2]
+                point = self.skeVtx[0][2]
+            elif bp==10:
+                planeIdx = np.zeros((2,3), dtype = np.float32)
+                planeIdx[0,0] = self.skeVtx[0][0,0]
+                planeIdx[0,1] = self.skeVtx[0][0,1]
+                planeIdx[0,2] = self.skeVtx[0][0,2]
+                planeIdx[1,0] = self.skeVtx[0][1,0]
+                planeIdx[1,1] = self.skeVtx[0][1,1]
+                planeIdx[1,2] = self.skeVtx[0][1,2]
+            elif bp==11:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 0
+                planeIdx[0,1] = 1
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][9]-self.skeVtx[0][10]
+                boneV = self.skeVtx[0][10]-self.skeVtx[0][11]
+                point = self.skeVtx[0][10]
+            elif bp==12:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][5]-self.skeVtx[0][6]
+                boneV = self.skeVtx[0][6]-self.skeVtx[0][7]
+                point = self.skeVtx[0][6]
+            elif bp==13:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][13]-self.skeVtx[0][14]
+                boneV = self.skeVtx[0][14]-self.skeVtx[0][15]
+                point = self.skeVtx[0][14]
+            elif bp==14:
+                planeIdx = np.zeros((1,5), dtype = np.float32)
+                planeIdx[0,0] = 1
+                planeIdx[0,1] = 0
+                planeIdx[0, 2:4] = planeIdx[0,0:2]+4
+                planeIdx[0,4] = 2
+                boneV_p = self.skeVtx[0][17]-self.skeVtx[0][18]
+                boneV = self.skeVtx[0][18]-self.skeVtx[0][19]
+                point = self.skeVtx[0][18]
+            if bp!=10:
+                v1 = self.coordsGbl[bp][int(planeIdx[0,1])] - self.coordsGbl[bp][int(planeIdx[0,0])]
+                v2 = self.coordsGbl[bp][int(planeIdx[0,2])] - self.coordsGbl[bp][int(planeIdx[0,0])]
+                self.planesF[bp,0:3] = np.cross(v1, v2)
+                self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
+                self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
+
+                #plane3
+                if bp!=5 and bp!=7:
+                    self.planesF[bp,0:3] = boneV[0:3]
+                    self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
+                    self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], point)
+                else:
+                    self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
+                
+
+                if np.dot(self.planesF[bp,0:3], self.coordsGbl[bp][int(planeIdx[0,4])])+self.planesF[bp,3] <0:
+                    self.planesF[bp] = -self.planesF[bp]
+                
+            else:
+                self.planesF[bp,0:3] = planeIdx[0,:]-planeIdx[1,:]
+                self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
+                self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], planeIdx[1,:])
+        
     def GetProjPts2D(self, vects3D, Pose, s=1) :
         """
         Project a list of vertexes in the image RGBD
@@ -805,6 +1206,7 @@ class RGBD():
             pt[2] = vects3D[i][2]
             # transform list
             pt = np.dot(Pose, pt)
+            pt /= pt[:,3].reshape((pt.shape[0], 1))
             #Project it in the 2D space
             if (pt[2] != 0.0):
                 pix[0] = pt[0]/pt[2]
@@ -834,6 +1236,7 @@ class RGBD():
         pt[:,0:3] = vects3D
         # transform list
         pt = np.dot(pt,Pose.T)
+        pt /= pt[:,3].reshape((pt.shape[0], 1))
         # Project it in the 2D space
         pt[:,2] = General.in_mat_zero2one(pt[:,2])
         pix[:,0] = pt[:,0]/pt[:,2]
@@ -855,6 +1258,7 @@ class RGBD():
 
         for i in range(1,len(self.vects3D)):
             vect = np.dot(self.vects3D[i],Pose[0:3,0:3].T )
+            vect /= vect[:,3].reshape((vect.shape[0], 1))
             newPt = np.zeros(vect.shape)
             for j in range(vect.shape[0]):
                 newPt[j][0] = ctr2D[i][0]-nbPix*vect[j][0]

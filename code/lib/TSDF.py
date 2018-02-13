@@ -31,12 +31,14 @@ class TSDFManager():
     Manager Truncated Signed Distance Function.
     """
 
-    def __init__(self, Size, Image, GPUManager):
+    def __init__(self, Size, Image, GPUManager, planeF, Tg):
         """
         Constructor
         :param Size: dimension of each axis of the volume
         :param Image: RGBD image to compare
         :param GPUManager: GPU environment for GPU computation
+        :param coordC: the corners of bounding-box in conacial frame
+        :param Tg: transform from the local coordinate to global coordinate
         """
         #dimensions
         self.Size = Size
@@ -66,29 +68,40 @@ class TSDFManager():
         self.DepthGPU = cl.Buffer(self.GPUManager.context, mf.READ_WRITE, Image.depth_image.nbytes)
         self.Calib_GPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf = Image.intrinsic)
         self.Pose_GPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, self.Pose.nbytes)
+        cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Tg)
 
+        # calculate the corner weight
+        self.planeF = cl.Buffer(self.GPUManager.context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=planeF)
+        tempDQ = np.zeros((2,4), dtype=np.float32)
+        self.boneDQGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, tempDQ.nbytes)
+        self.jointDQGPU = cl.Buffer(self.GPUManager.context, mf.READ_ONLY, tempDQ.nbytes)
 
-
+    
 #######
 ##GPU code
 #####
 
     # Fuse on the GPU
-    def FuseRGBD_GPU(self, Image, Pose):
+    def FuseRGBD_GPU(self, Image, boneDQ, jointDQ):
         """
         Update the TSDF volume with Image
         :param Image: RGBD image to update to its surfaces
-        :param Pose: transform from the first camera pose to the last camera pose (include local coordinate to global coordinate)
+        :param boneDQ: the dual quaternion of bone in new frame
+        :param jointDQ: the dual quaternion of joint in new frame
+        :param bp: the indexof body part
         :return: none
         """
         # initialize buffers
-        cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Pose)
+        #cl.enqueue_write_buffer(self.GPUManager.queue, self.Pose_GPU, Tg)
         cl.enqueue_write_buffer(self.GPUManager.queue, self.DepthGPU, Image.depth_image)
+        cl.enqueue_write_buffer(self.GPUManager.queue, self.boneDQGPU, boneDQ)
+        cl.enqueue_write_buffer(self.GPUManager.queue, self.jointDQGPU, jointDQ)
 
         # fuse data of the RGBD imnage with the TSDF volume 3D model
         self.GPUManager.programs['FuseTSDF'].FuseTSDF(self.GPUManager.queue, (self.Size[0], self.Size[1]), None, \
-                                self.TSDFGPU, self.DepthGPU, self.Param, self.Size_Volume, self.Pose_GPU, self.Calib_GPU, \
-                                np.int32(Image.Size[0]), np.int32(Image.Size[1]),self.WeightGPU)
+                                self.TSDFGPU, self.DepthGPU, self.Param, self.Size_Volume, self.Pose_GPU, \
+                                self.boneDQGPU, self.jointDQGPU, self.planeF,\
+                                self.Calib_GPU, np.int32(Image.Size[0]), np.int32(Image.Size[1]),self.WeightGPU)
 
         # update CPU array. Read the buffer to write in the CPU array.
         cl.enqueue_read_buffer(self.GPUManager.queue, self.TSDFGPU, self.TSDF).wait()
@@ -97,10 +110,8 @@ class TSDFManager():
         TSDFNaN = np.count_nonzero(np.isnan(self.TSDF))
         print "TSDFNaN : %d" %(TSDFNaN)
         '''
-        cl.enqueue_read_buffer(self.GPUManager.queue, self.WeightGPU, self.Weight).wait()  
-
-
-    
+        cl.enqueue_read_buffer(self.GPUManager.queue, self.WeightGPU, self.Weight).wait()
+        
 #####
 #End GPU code
 #####
@@ -237,7 +248,8 @@ class TSDFManager():
             pt = np.dstack((voxels2D, stack_z))
             pt = np.dstack((pt, stack_pt))  # record transformed 3D positions of all voxels
             pt = np.dot(Transform,pt.transpose(0,2,1)).transpose(1,2,0)                
-                    
+            pt /= pt[:,3].reshape((pt.shape[0], 1))
+
             #if (pt[2] != 0.0):
             lpt = np.dsplit(pt,4)
             lpt[2] = General.in_mat_zero2one(lpt[2])
