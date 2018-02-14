@@ -19,7 +19,6 @@ from pyquaternion import Quaternion
 PI = math.pi
 
 General = imp.load_source('General', './lib/General.py')
-DualQuaternion = imp.load_source('DualQuaternion', './lib/DualQuaternionClass.py')
 
 class Stitch():
     """

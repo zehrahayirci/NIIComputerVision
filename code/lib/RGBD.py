@@ -86,7 +86,7 @@ class RGBD():
             self.Index = idx
             
         depth_in = self.lImages[0][self.Index]
-        print "Input depth image is of size: ", depth_in.shape
+        print "Input depth image is of size: " + str(depth_in.shape)
         size_depth = depth_in.shape
         self.Size = (size_depth[0], size_depth[1], 3)
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
@@ -477,7 +477,7 @@ class RGBD():
 
         # Retrieve every already segmentated part to the main body.
         tmp = armLeft[0]+armLeft[1]+armRight[0]+armRight[1]+legRight[0]+legRight[1]+legLeft[0]+legLeft[1]
-        MidBdyImage =(imageWBG-(tmp>0))
+        MidBdyImage =(imageWBG-(tmp>0)*1.0)
 
         # display result
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))

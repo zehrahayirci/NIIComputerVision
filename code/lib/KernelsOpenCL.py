@@ -81,7 +81,7 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
             DQ[1][2] += (weight)*jointDQ[1*4+2];
             DQ[1][3] += (weight)*jointDQ[1*4+3];
             float mag = DQ[0][0]*DQ[0][0]+DQ[0][1]*DQ[0][1]+DQ[0][2]*DQ[0][2]+DQ[0][3]*DQ[0][3];
-            mag = pow(mag, 0.5);
+            mag = pow(mag, 0.5f);
             if(mag!=0){
                 int d;
                 DQ[0][0] = DQ[0][0]/mag;
