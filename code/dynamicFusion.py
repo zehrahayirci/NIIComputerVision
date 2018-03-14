@@ -14,16 +14,17 @@ GPU = imp.load_source('GPUManager', './lib/GPUManager.py')
 
 def main(GPUManager):
     ''' Create Menu to load data '''
-    M = imp.load_source('Menu', './lib/Menu.py')
+    #M = imp.load_source('Menu', './lib/Menu.py')
     root = tk.Tk()
-    menu_app = M.Menu(root)
-    menu_app.mainloop()
+    #menu_app = M.Menu(root)
+    #menu_app.mainloop()
 
     A = imp.load_source('Application', './lib/Application.py')
-    root = tk.Tk()
-    app = A.Application(menu_app.filename, GPUManager, root)
-    app.mainloop()
-    
+    #root = tk.Tk()
+    #app = A.Application(menu_app.filename, GPUManager, root)
+    #app.mainloop()
+    A.Application('../data/', GPUManager, root)
+
     return 0
 
 
