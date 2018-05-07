@@ -18,20 +18,20 @@ __kernel void Test(__global float *TSDF) {
 #__read_only image2d_t VMap
 Kernel_FuseTSDF = """
 __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __constant float *Param, __constant int *Dim,
-                           __constant float *Pose, 
+                           __constant float *Pose,
                            __constant float *boneDQ,  __constant float *jointDQ, __constant float *planeF,
                            __constant float *calib, const int n_row, const int m_col, __global short int *Weight) {
         //const sampler_t smp =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
 
         const float nu = 0.05f;
 
-            
+
         float4 pt;
         float4 ctr;
         float4 pt_T;
         float4 ctr_T;
-        int2 pix;        
-        
+        int2 pix;
+
         int x = get_global_id(0); /*height*/
         int y = get_global_id(1); /*width*/
         pt.x = ((float)(x)-Param[0])/Param[1];
@@ -40,7 +40,7 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
         float y_T =  Pose[4]*pt.x + Pose[5]*pt.y + Pose[7];
         float z_T =  Pose[8]*pt.x + Pose[9]*pt.y + Pose[11];
         float w_T =  Pose[12]*pt.x + Pose[13]*pt.y + Pose[15];
-        
+
         float convVal = 32767.0f;
         int z ;
         for ( z = 0; z < Dim[2]; z++) { /*depth*/
@@ -49,8 +49,8 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
 
             // Transform voxel coordinates into 3D point coordinates
             // Param = [c_x, dim_x, c_y, dim_y, c_z, dim_z]
-            pt.z = ((float)(z)-Param[4])/Param[5];          
-            
+            pt.z = ((float)(z)-Param[4])/Param[5];
+
             // Transfom the voxel into the Image coordinate space
             //transform form local to global
             pt_T.x = x_T + Pose[2]*pt.z; //Pose is column major
@@ -127,36 +127,39 @@ __kernel void FuseTSDF(__global short int *TSDF,  __global float *Depth, __const
             pt_T.w = pt.w/pt.w;
 
             // Project onto Image
-            pix.x = convert_int(round((pt_T.x/fabs(pt_T.z))*calib[0] + calib[2])); 
-            pix.y = convert_int(round((pt_T.y/fabs(pt_T.z))*calib[4] + calib[5])); 
-            
+            pix.x = convert_int(round((pt_T.x/fabs(pt_T.z))*calib[0] + calib[2]));
+            pix.y = convert_int(round((pt_T.y/fabs(pt_T.z))*calib[4] + calib[5]));
+
             // Check if the pixel is in the frame
             if (pix.x < 0 || pix.x > m_col-1 || pix.y < 0 || pix.y > n_row-1){
                 if (Weight[idx] == 0)
                     TSDF[idx] = (short int)(convVal);
                 continue;
             }
-            
+
             //Compute distance between project voxel and surface in the RGBD image
             float dist = -(pt_T.z - Depth[pix.x + m_col*pix.y])/nu;
-            dist = min(1.0f, max(-1.0f, dist));            
+            dist = min(1.0f, max(-1.0f, dist));
             if (Depth[pix.x + m_col*pix.y] == 0) {
                 if (Weight[idx] == 0)
                     TSDF[idx] = (short int)(convVal);
                 continue;
             }
-            
+
+            float w = 1.0f;
+            if (dist<(float)(TSDF[idx])/convVal) w=0.1f;
             if (dist > 1.0f) dist = 1.0f;
             else dist = max(-1.0f, dist);
-                
+
+
             // Running Average
             float prev_tsdf = (float)(TSDF[idx])/convVal;
             float prev_weight = (float)(Weight[idx]);
-            
-            TSDF[idx] =  (short int)(round(((prev_tsdf*prev_weight+dist)/(prev_weight+1.0f))*convVal));
+
+            TSDF[idx] =  (short int)(round(((prev_tsdf*prev_weight+dist*w)/(prev_weight+w))*convVal));
             Weight[idx] = min(1000, Weight[idx]+1);
          }
-        
+
 }
 """
 
