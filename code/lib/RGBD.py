@@ -40,7 +40,7 @@ class RGBD():
         self.colorname = colorname # useless
         self.intrinsic = intrinsic
         self.fact = fact
-        
+
     def LoadMat(self, Images,Pos_2D,BodyConnection, ColorImg):
         """
         Load information in datasets into the RGBD object
@@ -58,7 +58,7 @@ class RGBD():
         self.Index = -1
         self.pos2d = Pos_2D
         self.connection = BodyConnection
-        
+
     def ReadFromDisk(self):
         """
         Read an RGB-D image from the disk
@@ -67,13 +67,13 @@ class RGBD():
         print(self.depthname)
         self.depth_in = cv2.imread(self.depthname, -1)
         self.color_image = cv2.imread(self.colorname, -1)
-        
+
         self.Size = self.depth_in.shape
         self.depth_image = np.zeros((self.Size[0], self.Size[1]), np.float32)
         for i in range(self.Size[0]): # line index (i.e. vertical y axis)
             for j in range(self.Size[1]):
                 self.depth_image[i,j] = float(self.depth_in[i,j][0]) / self.fact
-                                
+
     def ReadFromMat(self, idx = -1):
         """
         Read an RGB-D image from matrix (dataset)
@@ -84,7 +84,7 @@ class RGBD():
             self.Index = self.Index + 1
         else:
             self.Index = idx
-            
+
         depth_in = self.lImages[0][self.Index]
         print "Input depth image is of size: " + str(depth_in.shape)
         size_depth = depth_in.shape
@@ -107,7 +107,7 @@ class RGBD():
     #####################################################################
     ################### Map Conversion Functions #######################
     #####################################################################
-    
+
     def Vmap(self):
         """
         Create the vertex image from the depth image and intrinsic matrice
@@ -121,8 +121,8 @@ class RGBD():
                     x = d*(j - self.intrinsic[0,2])/self.intrinsic[0,0]
                     y = d*(i - self.intrinsic[1,2])/self.intrinsic[1,1]
                     self.Vtx[i,j] = (x, y, d)
-        
-    
+
+
     def Vmap_optimize(self):
         """
         Create the vertex image from the depth image and intrinsic matrice
@@ -162,7 +162,7 @@ class RGBD():
                 if (LA.norm(nmle) > 0.0):
                     nmle = nmle/LA.norm(nmle)
                 self.Nmls[i, j] = (nmle[0], nmle[1], nmle[2])
-                
+
     def NMap_optimize(self):
         """
         Compute normal map, CPU optimize algo
@@ -171,7 +171,7 @@ class RGBD():
         self.Nmls = np.zeros(self.Size, np.float32)
         # matrix of normales for each direction
         nmle1 = General.normalized_cross_prod_optimize(self.Vtx[2:self.Size[0],1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
-                                               self.Vtx[1:self.Size[0]-1,2:self.Size[1]] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])        
+                                               self.Vtx[1:self.Size[0]-1,2:self.Size[1]] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
         nmle2 = General.normalized_cross_prod_optimize(self.Vtx[1:self.Size[0]-1,2:self.Size[1]  ] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
                                                self.Vtx[0:self.Size[0]-2,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1])
         nmle3 = General.normalized_cross_prod_optimize(self.Vtx[0:self.Size[0]-2,1:self.Size[1]-1] - self.Vtx[1:self.Size[0]-1,1:self.Size[1]-1], \
@@ -182,7 +182,7 @@ class RGBD():
         # normalized
         norm_mat_nmle = np.sqrt(np.sum(nmle*nmle,axis=2))
         norm_mat_nmle = General.in_mat_zero2one(norm_mat_nmle)
-        #norm division 
+        #norm division
         nmle = General.division_by_norm(nmle,norm_mat_nmle)
         self.Nmls[1:self.Size[0]-1][:,1:self.Size[1]-1] = nmle
         return self.Nmls
@@ -296,7 +296,7 @@ class RGBD():
         pt /= pt[:,3].reshape((pt.shape[0], 1))
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Pose[0:3,0:3].T)
-        
+
 
         # projection in 2D space
         lpt = np.split(pt,4,axis=1)
@@ -323,7 +323,7 @@ class RGBD():
             result[line_index[:], column_index[:]]= np.dstack( ( (nmle[ ::s,0]+1.0)*(255./2.)*cdt, \
                                                                        ((nmle[ ::s,1]+1.0)*(255./2.))*cdt, \
                                                                        ((nmle[ ::s,2]+1.0)*(255./2.))*cdt ) ).astype(int)
-        return result  
+        return result
 
 
     # useless
@@ -348,10 +348,10 @@ class RGBD():
         :return: points in 2D coordinate and mask
         """
         size = vtx.shape
-        # find the correspondence 2D point by projection 
-        stack_pix = np.ones(size[0], dtype = np.float32) 
-        stack_pt = np.ones(size[0], dtype = np.float32) 
-        pix = np.zeros((size[0], 2), dtype = np.float32) 
+        # find the correspondence 2D point by projection
+        stack_pix = np.ones(size[0], dtype = np.float32)
+        stack_pt = np.ones(size[0], dtype = np.float32)
+        pix = np.zeros((size[0], 2), dtype = np.float32)
         pix = np.stack((pix[:,0],pix[:,1],stack_pix), axis = 1)
         pt = np.stack((vtx[:,0],vtx[:,1],vtx[:,2],stack_pt),axis = 1)
         # transform vertices to camera pose
@@ -411,13 +411,23 @@ class RGBD():
         maxH = np.max(pos2D[:,0])
         # distance head to neck. Let us assume this is enough for all borders
         distH2N = LA.norm( (pos2D[self.connection[0,1]-1]-pos2D[self.connection[0,0]-1])).astype(np.int16)+15
+        # for MIT data
+        #'''
+        [row, col] = np.where(self.depth_image>0)
+        minV = np.min(row)
+        maxV = np.max(row)
+        minH = np.min(col)
+        maxH = np.max(col)
+        distH2N = 0
+        #'''
+
         Box = self.depth_image
         Box_ori = self.depth_image_ori
         ############ Should check whether the value are in the frame #####################
         colStart = (minH-distH2N).astype(np.int16)
         lineStart = (minV-distH2N).astype(np.int16)
         colEnd = (maxH+distH2N).astype(np.int16)
-        lineEnd = (maxV+distH2N).astype(np.int16) 
+        lineEnd = (maxV+distH2N).astype(np.int16)
         colStart = max(0, colStart)
         lineStart = max(0, lineStart)
         colEnd = min(colEnd, self.Size[1])
@@ -435,6 +445,7 @@ class RGBD():
         Threshold the depth image in order to to get the whole body alone with the bounding box (BB)
         :return: The connected component that contain the body
         """
+        #'''
         pos2D = self.CroppedPos
         max_value = 1
         self.CroppedBox = self.CroppedBox.astype(np.uint16)
@@ -447,11 +458,15 @@ class RGBD():
         maxi = np.max(bdy)
         #print "max: %u" % (maxi)
         # double threshold according to the value of the depth
-        bwmin = (self.CroppedBox > mini-0.01*max_value) 
+        bwmin = (self.CroppedBox > mini-0.01*max_value)
         bwmax = (self.CroppedBox < maxi+0.01*max_value)
         bw0 = bwmin*bwmax
         # Remove all stand alone object
         bw0 = ( self.RemoveBG(bw0)>0)
+        '''
+        #for MIT
+        bw0 = (self.CroppedBox>0)
+        #'''
         return bw0
 
     def BodySegmentation(self):
@@ -460,10 +475,10 @@ class RGBD():
         :return:  none
         """
         #Initialized segmentation with the cropped image
-        self.segm = segm.Segmentation(self.CroppedBox,self.CroppedPos) 
+        self.segm = segm.Segmentation(self.CroppedBox,self.CroppedPos)
         # binary image without bqckground
         imageWBG = (self.BdyThresh()>0)
-        
+
         # Cropped image
         B = self.CroppedBox
 
@@ -489,17 +504,18 @@ class RGBD():
         handLeft = ( self.segm.GetHand( MidBdyImage,left))
         footRight = ( self.segm.GetFoot( MidBdyImage,right))
         footLeft = ( self.segm.GetFoot( MidBdyImage,left))
-        
+
         # handle the ground near the foot
-        if self.hasColor:    
+        ''' for MIT
+        if self.hasColor:
             a = (footRight*1.0).reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1],1)) *self.CroppedBox_color
-            #cv2.imshow("a", a) 
+            #cv2.imshow("a", a)
             a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],3))
             labeled = KMeans(n_clusters=3).fit(a).labels_
             labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
             footRight = (labeled==labeled[self.CroppedPos[19][1]-1, self.CroppedPos[19][0]-1+5])
-            #cv2.imshow("", labeled*1.0/3)
-            #cv2.waitKey()
+            cv2.imshow("", labeled*1.0/3)
+            cv2.waitKey()
             a = (footLeft*1.0).reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1],1)) *self.CroppedBox_color
             a = a.reshape((self.CroppedBox.shape[0]*self.CroppedBox.shape[1],3))
             labeled = KMeans(n_clusters=3).fit(a).labels_
@@ -516,6 +532,7 @@ class RGBD():
             labeled = KMeans(n_clusters=3).fit(a).labels_
             labeled = labeled.reshape((self.CroppedBox.shape[0],self.CroppedBox.shape[1]))
             footLeft = (labeled==labeled[self.CroppedPos[15][1]-1, self.CroppedPos[15][0]-1])
+        '''
 
         # display the trunck
         # cv2.imshow('trunk' , MidBdyImage.astype(np.float))
@@ -542,10 +559,10 @@ class RGBD():
         self.bdyColor = np.array( [np.array([0,0,255]), np.array([200,200,255]), np.array([0,255,0]), np.array([200,255,200]),\
                                    np.array([255,0,255]), np.array([255,180,255]), np.array([255,255,0]), np.array([255,255,180]),\
                                    np.array([255,0,0]), np.array([255,255,255]),np.array([0,100,0]),np.array([0,191,255]),\
-                                   np.array([255,165,0]),np.array([199,21,133]) ])    
+                                   np.array([255,165,0]),np.array([199,21,133]) ])
         self.labelColor = np.array( ["#0000ff", "#ffc8ff", "#00ff00","#c8ffc8","#ff00ff","#ffb4ff",\
                                    "#ffff00","#ffffb4","#ff0000","#ffffff","#00bfff","#006400",\
-                                   "#c715ff","#ffa500"])    
+                                   "#c715ff","#ffa500"])
 
         '''
         correspondance between number and body parts and color
@@ -565,7 +582,7 @@ class RGBD():
         footRight = right foot     color = [199,21,133]  = #c715ff     dark purple           label = 13
         footLeft = left foot       color = [255,165,0]   = #ffa500     orange                label = 14
         '''
-        
+
 
     def BodyLabelling(self):
         '''Create label for each body part in the depth_image'''
@@ -573,8 +590,8 @@ class RGBD():
         self.labels = np.zeros(Size,np.int)
         self.labelList = np.zeros((self.bdyPart.shape[0]+1, Size[0], Size[1]),np.int)
         Txy = self.transCrop
-        for i in range(self.bdyPart.shape[0]): 
-            self.labels[Txy[1]:Txy[3],Txy[0]:Txy[2]] += (i+1)*self.bdyPart[i]            
+        for i in range(self.bdyPart.shape[0]):
+            self.labels[Txy[1]:Txy[3],Txy[0]:Txy[2]] += (i+1)*self.bdyPart[i]
             self.labelList[i+1, Txy[1]:Txy[3],Txy[0]:Txy[2]] += (self.bdyPart[i] + self.overlapmap[i])
             self.labelList[i+1] = (self.labelList[i+1]>0)
             # if some parts overlay, the number of this part will bigger
@@ -610,7 +627,7 @@ class RGBD():
                 interPoints = interLines[j]
                 rr,cc,val = line_aa(int(interPoints[0][1]), int(interPoints[0][0]), int(interPoints[1][1]), int(interPoints[1][0]))
                 self.overlapmap[i, rr, cc]=2
-            '''    
+            '''
             Txy = self.transCrop
             a += self.overlapmap[i]
             a += self.bdyPart[i]
@@ -631,7 +648,7 @@ class RGBD():
 
 #######################################################################
 ################### Bounding boxes Function #######################
-##################################################################             
+##################################################################
 
     def GetCenter3D(self,i):
         """
@@ -644,7 +661,7 @@ class RGBD():
         ctr_z = (max(self.PtCloud[i][:, 2])+min(self.PtCloud[i][:, 2]))/2
         return [ctr_x, ctr_y, ctr_z]
 
-        
+
     def SetTransfoMat3D(self,evecs,i):
         """
         Generate the transformation matrix
@@ -667,9 +684,9 @@ class RGBD():
         self.TransfoBB.append(Transfo.transpose())
         #display
         #print "TransfoBB[%d]" %(i)
-        #print self.TransfoBB[i]        
-        
-        
+        #print self.TransfoBB[i]
+
+
     def bdyPts3D(self, mask):
         """
         create of cloud of point from part of the RGBD image
@@ -686,7 +703,7 @@ class RGBD():
                     res[k] = self.Vtx[i,j]
                     k = k+1
         elapsed_time3 = time.time() - start_time2
-        print "making pointcloud process time: %f" % (elapsed_time3)       
+        print "making pointcloud process time: %f" % (elapsed_time3)
         return res
 
     def bdyPts3D_optimize(self, mask):
@@ -712,7 +729,7 @@ class RGBD():
         res = np.dstack((x_res,y_res,z_res)).reshape(nbPts,3)
 
         #elapsed_time3 = time.time() - start_time2
-        #print "making pointcloud process time: %f" % (elapsed_time3)    
+        #print "making pointcloud process time: %f" % (elapsed_time3)
 
         return res
 
@@ -759,7 +776,7 @@ class RGBD():
 
             depth = abs(np.amax(self.coordsGbl[j][:,2])-np.amin(self.coordsGbl[j][0,2]))/2
             depth = 0
-            if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:                
+            if self.labels[int(pos2D[i][1]), int(pos2D[i][0])]!=0:
                 skedepth[i] = self.depth_image[int(pos2D[i][1]), int(pos2D[i][0])]+depth
             else:
                 print "meet the pose " + str(i) + "==0 when getting junction"
@@ -774,23 +791,23 @@ class RGBD():
                 else:
                     print "QAQQQQ"
                     #exit()
-    
+
         #  project to 3D
         pos2D[:,0] = (pos2D[:,0]-self.intrinsic[0,2])/self.intrinsic[0,0]
         pos2D[:,1] = (pos2D[:,1]-self.intrinsic[1,2])/self.intrinsic[1,1]
         x = skedepth * pos2D[:,0]
         y = skedepth * pos2D[:,1]
         z = skedepth
-        
+
         # give hand and foot't joint correct
         for i in [7,11,15,19]:
             x[i] = (x[i-1]-x[i-2])/4+x[i-1]
             y[i] = (y[i-1]-y[i-2])/4+y[i-1]
             z[i] = (z[i-1]-z[i-2])/4+z[i-1]
 
-        return np.dstack((x,y,z)).astype(np.float32)  
-    
-           
+        return np.dstack((x,y,z)).astype(np.float32)
+
+
     def myPCA(self, dims_rescaled_data=3):
         # dims_rescaled_data useless
         """
@@ -827,10 +844,11 @@ class RGBD():
             # compute center of 3D
             self.PtCloud.append(self.bdyPts3D_optimize(self.mask[i]))
             self.pca.append(PCA(n_components=3))
-            self.pca[i].fit(self.PtCloud[i]) 
-            
+            self.pca[i].fit(self.PtCloud[i])
+
             # Compute 3D centers
-            self.ctr3D.append(self.GetCenter3D(i))         
+            #self.ctr3D.append(self.GetCenter3D(i))
+            self.ctr3D.append(self.pca[i].mean_)
             #print "ctr3D indexes :"
             #print self.ctr3D[i]
 
@@ -842,16 +860,16 @@ class RGBD():
             #Coordinates of the bounding boxes
             self.FindCoord3D(i)
             #Create local to global transform
-            self.SetTransfoMat3D(self.pca[i].components_,i)  
+            self.SetTransfoMat3D(self.pca[i].components_,i)
 
         # create the skeleton vtx
         self.skeVtx = self.getSkeletonVtx()
 
-    def FindCoord3D(self,i):       
+    def FindCoord3D(self,i):
         '''
         draw the bounding boxes in 3D for each part of the human body
         :param i : number of the body parts
-        '''     
+        '''
         # Adding a space so that the bounding boxes are wider
         VoxSize = 0.005
         wider = 5*VoxSize*0
@@ -864,19 +882,19 @@ class RGBD():
         maxZ = np.max(self.TVtxBB[i][:,2]) + wider
         # extremes points of the bodies
         xymz = np.array([minX,minY,minZ])
-        xYmz = np.array([minX,maxY,minZ])           
+        xYmz = np.array([minX,maxY,minZ])
         Xymz = np.array([maxX,minY,minZ])
         XYmz = np.array([maxX,maxY,minZ])
         xymZ = np.array([minX,minY,maxZ])
         xYmZ = np.array([minX,maxY,maxZ])
         XymZ = np.array([maxX,minY,maxZ])
-        XYmZ = np.array([maxX,maxY,maxZ])           
-        
+        XYmZ = np.array([maxX,maxY,maxZ])
+
         # New coordinates and new images
         self.coordsL.append( np.array([xymz,xYmz,XYmz,Xymz,xymZ,xYmZ,XYmZ,XymZ]) )
         #print "coordsL[%d]" %(i)
         #print self.coordsL[i]
-        
+
         # transform back
         self.coordsGbl.append( self.pca[i].inverse_transform(self.coordsL[i]))
         #print "coordsGbl[%d]" %(i)
@@ -911,7 +929,7 @@ class RGBD():
         labelList = [[],[2,2,12,12], [2,2,2,2], [4,4,11,11], [4,4,4,4], [5,5,5,5], [6,6,5,5], [5,7,7,7], [8,8,7,7], \
         [9,9,9,9], [2,2,9,9,4,4,5,5,7], [11,11,11,11], [12,12,12,12], [8,8,13,13], [6,6,14,14]]
         t=0
-        
+
 
         #2D 2 3D
         for i in range(1, len(interPointList)):
@@ -925,10 +943,10 @@ class RGBD():
                 interPointList[i][j][1] = float(interPointList[i][j][1] + self.transCrop[1])
                 # project to 3D coordinate
                 interPointList[i][j][0] = ( interPointList[i][j][0] - self.intrinsic[0,2])/self.intrinsic[0,0]*depth
-                interPointList[i][j][1] = ( interPointList[i][j][1] - self.intrinsic[1,2])/self.intrinsic[1,1]*depth                   
+                interPointList[i][j][1] = ( interPointList[i][j][1] - self.intrinsic[1,2])/self.intrinsic[1,1]*depth
                 interPointList[i][j].append(depth)
                 t+=1
-        
+
         # for each body part
         self.coordsGbl = []
         self.coordsGbl.append(np.array((0,0,0)))
@@ -937,7 +955,7 @@ class RGBD():
 
         for bp in range(1,len(interPointList)):
             points = interPointList[bp]
-            
+
             if bp==11 or bp==12:
                 if bp==12:
                     point2 = [interPointList[1][0][0]/2+interPointList[1][1][0]/2, interPointList[1][0][1]/2+interPointList[1][1][1]/2, interPointList[1][0][2]/2+interPointList[1][1][2]/2]
@@ -962,7 +980,7 @@ class RGBD():
                     else:
                         points[2][0] -= 0.1
                         points[3][0] += 0.1
-                
+
             if bp==13 or bp==14:
                 if bp==13:
                     point2 = [interPointList[8][2][0]/2+interPointList[8][3][0]/2, interPointList[8][2][1]/2+interPointList[8][3][1]/2, interPointList[8][2][2]/2+interPointList[8][3][2]/2]
@@ -1011,7 +1029,7 @@ class RGBD():
                 BBTrans[p+len(points)] = np.identity(4)
             self.coordsGbl.append(coordGbl)
             self.BBTrans.append(BBTrans)
-        
+
         # update local coordinate
         self.coordsL = []
         self.coordsL.append([0.,0.,0.])
@@ -1019,14 +1037,14 @@ class RGBD():
         self.BBsize.append([0.,0.,0.])
         for bp in range(1,15):
             self.coordsL.append(self.pca[bp].transform(self.coordsGbl[bp]).astype(np.float32))
-            minX = np.min(self.coordsL[bp][:,0]) 
+            minX = np.min(self.coordsL[bp][:,0])
             maxX = np.max(self.coordsL[bp][:,0])
-            minY = np.min(self.coordsL[bp][:,1]) 
+            minY = np.min(self.coordsL[bp][:,1])
             maxY = np.max(self.coordsL[bp][:,1])
             minZ = np.min(self.coordsL[bp][:,2])
             maxZ = np.max(self.coordsL[bp][:,2])
             self.BBsize.append([LA.norm(maxX - minX), LA.norm(maxY - minY), LA.norm(maxZ - minZ)])
-    
+
 
     def getWarpingPlanes(self):
         """
@@ -1041,7 +1059,7 @@ class RGBD():
                 planeIdx[0,0] = 1
                 planeIdx[0,1] = 0
                 planeIdx[0, 2:4] = planeIdx[0,0:2]+4
-                planeIdx[0,4] = 2 
+                planeIdx[0,4] = 2
                 boneV_p = self.skeVtx[0][5]-self.skeVtx[0][4]
                 boneV = self.skeVtx[0][6]-self.skeVtx[0][5]
                 point = self.skeVtx[0][5]
@@ -1179,16 +1197,16 @@ class RGBD():
                     self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], point)
                 else:
                     self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], self.coordsGbl[bp][int(planeIdx[0,1])])
-                
+
 
                 if np.dot(self.planesF[bp,0:3], self.coordsGbl[bp][int(planeIdx[0,4])])+self.planesF[bp,3] <0:
                     self.planesF[bp] = -self.planesF[bp]
-                
+
             else:
                 self.planesF[bp,0:3] = planeIdx[0,:]-planeIdx[1,:]
                 self.planesF[bp,0:3] /= LA.norm(self.planesF[bp,0:3])
                 self.planesF[bp, 3] = -np.dot(self.planesF[bp, 0:3], planeIdx[1,:])
-        
+
     def GetProjPts2D(self, vects3D, Pose, s=1) :
         """
         Project a list of vertexes in the image RGBD
@@ -1217,10 +1235,10 @@ class RGBD():
             else :
                 column_index = 0
                 line_index = 0
-            #print "line,column index : (%d,%d)" %(line_index,column_index) 
+            #print "line,column index : (%d,%d)" %(line_index,column_index)
             drawVects.append(np.array([column_index,line_index]))
         return drawVects
-            
+
     def GetProjPts2D_optimize(self, vects3D, Pose) :
         """
         Project a list of vertexes in the image RGBD. Optimize for CPU version.
@@ -1243,13 +1261,13 @@ class RGBD():
         pix[:,1] = pt[:,1]/pt[:,2]
         pix = np.dot( pix,self.intrinsic.T)
         column_index = pix[:,0].astype(np.int)
-        line_index = pix[:,1].astype(np.int)        
+        line_index = pix[:,1].astype(np.int)
         drawVects = np.array([column_index,line_index]).T
-        return drawVects            
+        return drawVects
 
 
-            
-    def GetNewSys(self, Pose,ctr2D,nbPix) : 
+
+    def GetNewSys(self, Pose,ctr2D,nbPix) :
         '''
         compute the coordinates of the points that will create the coordinates system
         '''
@@ -1266,7 +1284,7 @@ class RGBD():
                 newPt[j][2] = vect[j][2]-nbPix*vect[j][2]/maxDepth
             self.drawNewSys.append(newPt)
 
-            
+
 
     def Cvt2RGBA(self,im_im):
         '''
@@ -1274,14 +1292,14 @@ class RGBD():
         THIS FUNCTION IS NOT USED IN THE PROJECT
         '''
         img = im_im.convert("RGBA")
-        datas = img.getdata()     
+        datas = img.getdata()
         newData = []
         for item in datas:
             if item[0] == 0 and item[1] == 0 and item[2] == 0:
                 newData.append((0, 0, 0, 0))
             else:
                 newData.append(item)
-        
+
         img.putdata(newData)
-        return img                
-                
+        return img
+

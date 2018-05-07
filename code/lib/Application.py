@@ -325,7 +325,7 @@ class Application(tk.Frame):
         TimeStart = time.time()
 
         #load data
-        matfilename ='041_1027_01'
+        matfilename ='I_crane3'
         mat = scipy.io.loadmat(path + '/' + matfilename + '.mat')
         lImages = mat['DepthImg']
         self.pos2d = mat['Pos2D']
@@ -345,8 +345,8 @@ class Application(tk.Frame):
         Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
 
         # number of images in the sequence. Start and End
-        self.Index = 4
-        nunImg = 8
+        self.Index = 0
+        nunImg = 40
         sImg = 1
 
         # Former Depth Image (i.e: i)
@@ -588,7 +588,8 @@ class Application(tk.Frame):
             imgstr = '0'+str(self.Index)
         else:
             imgstr = str(self.Index)
-        cv2.imwrite('../boundingboxes/bb_'+ imgstr +'.png', result_stack*255)
+        cv2.imwrite('../boundingboxes/bb_'+ imgstr +'.png', bbrendering)
+        cv2.imwrite('../normal/nml_'+ imgstr +'.png', rendering)
 
         #as prev RGBD
         newRGBD = self.RGBD
@@ -634,7 +635,7 @@ class Application(tk.Frame):
                 newRGBD[bp].NMap_optimize()
 
             # show segmentation result (testing)
-            '''
+            #'''
             img_label_temp =np.zeros((self.Size[0], self.Size[1], 3), dtype = np.uint8)
             img_label_temp = self.DrawColors2D(newRGBD[0],img_label_temp)
             img_label = img_label_temp.copy()
@@ -654,7 +655,7 @@ class Application(tk.Frame):
             else:
                 imgstr = str(imgk)
             cv2.imwrite('../segment/seg_'+ imgstr +'.png', img_label)
-            '''
+            #'''
 
             # creating mesh of whole body (testing)
             tempVtx = np.zeros((sum(sum(newRGBD[0].Vtx[:,:,2]>0)), 3))
@@ -746,6 +747,22 @@ class Application(tk.Frame):
             #for bp in range(bpstart, nbBdyPart):
                 #Parts[1].MC.SaveBBToPlyExt("BB_"+imgkStr+"_"+str(bp)+".ply", StitchBdy.TransformVtx(newRGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp],self.RGBD[0].coordsGbl[bp], self.RGBD[0].BBTrans[bp], Id4, Id4, 0,Id4, bp), bp)
 
+            # save model in first frame space
+            nb_verticesGlo = 0
+            nb_facesGlo = 0
+            StitchBdy = Stitcher.Stitch(nbBdyPart)
+            boneTrans, boneSubTrans = StitchBdy.GetVBonesTrans(self.RGBD[0].skeVtx[0], self.RGBD[0].skeVtx[0])
+            for bp in range(1,nbBdyPart):
+                boneMDQ, boneJDQ = StitchBdy.getJointInfo(bp, boneTrans, boneSubTrans)
+                nb_verticesGlo = nb_verticesGlo + Parts[bp].MC.nb_vertices[0]
+                nb_facesGlo = nb_facesGlo +Parts[bp].MC.nb_faces[0]
+                if bp ==1 :
+                    StitchBdy.StitchedVertices = StitchBdy.TransformVtx(Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0])
+                    StitchBdy.StitchedNormales = StitchBdy.TransformNmls(Parts[bp].MC.Normales,Parts[bp].MC.Vertices, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, 1, self.RGBD[0])
+                    StitchBdy.StitchedFaces = Parts[bp].MC.Faces
+                else:
+                    StitchBdy.NaiveStitch(Parts[bp].MC.Vertices,Parts[bp].MC.Normales,Parts[bp].MC.Faces, self.RGBD[0].coordsGbl[bp], newRGBD[0].coordsGbl[bp], newRGBD[0].BBTrans[bp], boneMDQ, boneJDQ, self.RGBD[0].planesF[bp], PoseBP[bp], bp, self.RGBD[0])
+            Parts[bp].MC.SaveToPlyExt("wholeBody"+str(imgkStr)+"F.ply",nb_verticesGlo,nb_facesGlo,StitchBdy.StitchedVertices,StitchBdy.StitchedFaces,0)
 
             # projection in 2d space to draw the 3D model(meshes) (testing)
             # show segmentation result
@@ -867,7 +884,8 @@ class Application(tk.Frame):
                 imgstr = '0'+str(imgk)
             else:
                 imgstr = str(imgk)
-            cv2.imwrite('../boundingboxes/bb_'+ imgstr +'.png', result_stack*255)
+            cv2.imwrite('../boundingboxes/bb_'+ imgstr +'.png', bbrendering)
+            cv2.imwrite('../normal/nml_'+ imgstr +'.png', rendering)
 
         TimeStart_Lapsed = time.time() - TimeStart
         print "total time: %f" %(TimeStart_Lapsed)

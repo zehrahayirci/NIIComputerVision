@@ -10,7 +10,7 @@ import numpy as np
 import math
 from math import cos, sin
 from numpy import linalg as LA
-import imp    
+import imp
 from skimage.draw import line_aa
 import copy
 from scipy.interpolate import griddata
@@ -155,7 +155,7 @@ class Stitch():
                 boneSubTrans[19]= np.dot(boneTrans[9], boneSubTrans[19])
                 jointDQ[0] = General.getDualQuaternionfromMatrix(boneSubTrans[19])
         return boneDQ, jointDQ
-            
+
 
     def NaiveStitch(self, PartVtx,PartNmls,PartFaces, coordC, coordNew, BBTrNew, boneDQ, jointDQ, planeF, Tg, bp, RGBD=0):
         """
@@ -167,7 +167,7 @@ class Stitch():
         :param coordC: the corners of bounding-box in conacial frame
         :param coordNew: the corners of bounding-box in new frame
         :param BBTrNew: the boundong-boxes' transform matrix of new frame
-        :param boneTr: the main bone transform 
+        :param boneTr: the main bone transform
         :param jointTr: the joint transfrom
         :param planeF: the plane function
         :param Tg: the transform matrix from local to global
@@ -187,9 +187,9 @@ class Stitch():
         self.StitchedVertices = np.concatenate((ConcatVtx,PartVertices))
         self.StitchedNormales = np.concatenate((ConcatNmls,PartNormales))
         self.StitchedFaces = np.concatenate((ConcatFaces,PartFacets))
-        
 
-        
+
+
     def TransformVtx(self, Vtx, coordC, coordNew, BBTrNew, boneDQ, jointDQ, planeF, Tg,bp,  s=1 , RGBD = 0):
         """
         Transform the vertices in a system to another system.
@@ -198,7 +198,7 @@ class Stitch():
         :param coordC: the corners of bounding-box in conacial frame
         :param coordNew: the corners of bounding-box in new frame
         :param BBTrNew: the boundong-boxes' transform matrix of new frame
-        :param boneDQ: the main bone DQ 
+        :param boneDQ: the main bone DQ
         :param jointDQ: the joint DQ
         :param areaIdx: the index of corner of joint area
         :param Tg: the transform matrix from local to global
@@ -231,7 +231,23 @@ class Stitch():
             #warping
             DQnp += (1-weights).reshape((VtxNum,1,1))*boneDQ[0].reshape((1,2,4))
             DQnp += (weights).reshape((VtxNum,1,1))*jointDQ[0].reshape((1,2,4))
-            
+            '''
+            #print weights
+            Id4 = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]], dtype = np.float32)
+            p1 = RGBD.GetProjPts2D_optimize(Vtx, Id4)
+            a = np.zeros((RGBD.Size[0], RGBD.Size[1]))
+            a[p1[:,1], p1[:,0]] = 1-weights
+            cv2.imwrite('C:/Users/CVLab-Yao/Desktop/NIIComputerVision/boundingboxes/'+str(bp)+"_"+str(0)+".png", a*255)
+            cv2.imshow("0", a)
+            a[p1[:,1], p1[:,0]] = weights
+            cv2.imwrite('C:/Users/CVLab-Yao/Desktop/NIIComputerVision/boundingboxes/'+str(bp)+"_"+str(1)+".png", a*255)
+            cv2.imshow("1", a)
+            cv2.waitKey(0)
+            if bp==1:
+                self.a = np.zeros((RGBD.Size[0], RGBD.Size[1]))
+            self.a[p1[:,1], p1[:,0]] = weights[:]
+            '''
+
             for v in range(VtxNum):
                 TrDQ = General.getDualQuaternionNormalize(DQnp[v,:,:])
                 Tr = General.getMatrixfromDualQuaternion(TrDQ)
@@ -244,7 +260,7 @@ class Stitch():
         return Vtx
 
         return newVtx
-        
+
     def TransformNmls(self, Nmls,  Vtx, coordC, coordNew, BBTrNew, boneDQ, jointDQ, planeF, Tg, bp,  s=1 , RGBD = 0):
         """
         Transform the normales in a system to another system.
@@ -257,8 +273,8 @@ class Stitch():
         """
         nmle = np.zeros((Nmls.shape[0], Nmls.shape[1]), dtype = np.float32)
         nmle[ ::s,:] = np.dot(Nmls[ ::s,:],Tg[0:3,0:3].T)
-        
-        
+
+
         stack_pt = np.ones(np.size(Vtx,0), dtype = np.float32)
         pt = np.stack( (Vtx[ ::s,0],Vtx[ ::s,1],Vtx[ ::s,2],stack_pt),axis =1 )
         pt = np.dot(pt, Tg.T)
@@ -283,7 +299,7 @@ class Stitch():
             #warping
             DQnp += (1-weights).reshape((VtxNum,1,1))*boneDQ[0].reshape((1,2,4))
             DQnp += (weights).reshape((VtxNum,1,1))*jointDQ[0].reshape((1,2,4))
-            
+
             for v in range(VtxNum):
                 TrDQ = General.getDualQuaternionNormalize(DQnp[v,:,:])
                 Tr = General.getMatrixfromDualQuaternion(TrDQ)
@@ -467,7 +483,7 @@ class Stitch():
             if i<=2 or i==8 or i==17:
                 bonemodel[i] = np.array([-1.0,0.0,0.0])
             elif i<=5 or i==11 or i==16:
-                bonemodel[i] = np.array([1.0,0.0,0.0]) 
+                bonemodel[i] = np.array([1.0,0.0,0.0])
             elif i<13:
                 bonemodel[i] = np.array([0.0,1.0,0.0])
             else:
@@ -508,7 +524,7 @@ class Stitch():
             R = General.GetRotatefrom2Vector(v2, v3)
             R1_T = np.identity(4)
             R1_T[0:3,0:3] = R
-            
+
             S_T = np.identity(4)
             S_T[0:3, 0:3] *= LA.norm(v1)/LA.norm(v2)
             self.boneTrans[bIdx] = R_T
@@ -584,7 +600,7 @@ class Stitch():
             pt2[2] = z
         pt2[0] *= pt2[2]
         pt2[1] *= pt2[2]
-        
+
         # do camera transformation
         pt1 = np.dot(pt1, pose.T)
         pt1 = pt1[0:3]/pt1[3]
@@ -614,7 +630,7 @@ class Stitch():
             coord[3,3] = 0
 
         return coord
-    
+
     def GetPos(self,bp):
         '''
         According to the body parts, get the correct index of junctions
