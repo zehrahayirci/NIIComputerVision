@@ -48,3 +48,13 @@ Download and extract all the files under data/ folder
 
 Running
 on terminal run dynamicFusion.py under code/ folder 
+
+Common Errors:
+Other CUDA versions may lead some OpenCL-CUDA library confusion
+*  version 'OPENCL_2.x' not found
+There is a simple "solution": try to move away the one from cuda and check if 
+it fixes the issue, like:
+```
+sudo mv /usr/local/cuda-10.0/targets/x86_64-linux/lib/libOpenCL.so.1  
+/usr/local/cuda-10.0/targets/x86_64-linux/lib/libOpenCL.so_from_cuda_do_not_use
+```
